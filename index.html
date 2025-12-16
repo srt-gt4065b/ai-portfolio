@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로젝트 관리 시스템 (CSV지원)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 lg:p-10">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-indigo-700">학생 프로젝트 관리 시스템</h1>
+            <p class="text-gray-500 mt-2">Firebase Firestore + CSV 일괄 업로드</p>
+        </header>
+
+        <div class="bg-white rounded-xl shadow-md p-6 mb-4 border border-gray-200">
+            <h2 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">✏️ 개별 프로젝트 등록</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <input type="text" id="inputOwner" placeholder="소유자 (예: 홍길동)" class="border p-2 rounded">
+                <input type="text" id="inputProject" placeholder="프로젝트명" class="border p-2 rounded">
+                <select id="inputType" class="border p-2 rounded">
+                    <option value="Game">Game</option>
+                    <option value="강의용">강의용</option>
+                    <option value="강의용 Game">강의용 Game</option>
+                </select>
+                <input type="text" id="inputUrl" placeholder="웹 주소 (https://...)" class="border p-2 rounded">
+                <input type="password" id="inputPw" placeholder="비밀번호 (1230)" class="border p-2 rounded bg-yellow-50">
+            </div>
+            <div class="mt-4 text-right">
+                <button id="btnAdd" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded font-bold shadow-lg">
+                    개별 등록하기
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-gray-50 rounded-xl shadow-inner p-6 mb-8 border border-gray-300">
+            <h2 class="text-lg font-bold mb-4 text-gray-700 border-b pb-2">📂 CSV 일괄 업로드</h2>
+            <div class="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div class="flex-grow">
+                    <p class="text-sm text-gray-500 mb-2">
+                        * CSV 형식: <strong>소유자,프로젝트명,유형,웹주소</strong> 순서 (헤더 제외)<br>
+                        * 주의: 업로드 시 비밀번호(1230)가 위 입력창에 입력되어 있어야 합니다.
+                    </p>
+                    <input type="file" id="csvFileInput" accept=".csv" class="block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-green-50 file:text-green-700
+                        hover:file:bg-green-100 cursor-pointer border rounded bg-white
+                    "/>
+                </div>
+                <button id="btnCsvUpload" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold shadow-lg h-10">
+                    CSV 업로드 시작
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <table class="min-w-full leading-normal">
+                <thead>
+                    <tr>
+                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">소유자</th>
+                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">프로젝트명</th>
+                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase">유형</th>
+                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">웹 주소</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="4" class="text-center py-10">로딩중...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+        // ------------------------------------------------------------------
+        // [설정] 본인의 Firebase Config를 붙여넣으세요
+        // ------------------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyBiMp5UEmNviSazPRxb-5L60jJnELZL6S0",
+  authDomain: "ai-coding-collection.firebaseapp.com",
+  projectId: "ai-coding-collection",
+  storageBucket: "ai-coding-collection.firebasestorage.app",
+  messagingSenderId: "572754851302",
+  appId: "1:572754851302:web:22050169bb98eebaa3d227"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const COLLECTION_NAME = "student_projects";
+
+        // 1. Read (실시간 목록)
+        const tableBody = document.getElementById("tableBody");
+        const q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
+
+        onSnapshot(q, (snapshot) => {
+            tableBody.innerHTML = "";
+            if (snapshot.empty) {
+                tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-10">데이터 없음</td></tr>`;
+                return;
+            }
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                let badge = "bg-gray-200 text-gray-800";
+                if(data.type.includes("Game")) badge = "bg-blue-100 text-blue-800";
+                if(data.type.includes("강의용")) badge = "bg-red-100 text-red-800";
+                
+                tableBody.innerHTML += `
+                    <tr>
+                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm font-bold">${data.owner}</td>
+                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">${data.project_name}</td>
+                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm text-center">
+                            <span class="px-3 py-1 font-semibold ${badge} rounded-full text-xs">${data.type}</span>
+                        </td>
+                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
+                            <a href="${data.url}" target="_blank" class="text-indigo-600 underline">이동</a>
+                        </td>
+                    </tr>
+                `;
+            });
+        });
+
+        // 2. Create (개별 등록)
+        document.getElementById("btnAdd").addEventListener("click", async () => {
+            const owner = document.getElementById("inputOwner").value;
+            const project = document.getElementById("inputProject").value;
+            const type = document.getElementById("inputType").value;
+            const url = document.getElementById("inputUrl").value;
+            const pw = document.getElementById("inputPw").value;
+
+            if (pw !== "1230") return alert("비밀번호가 틀렸습니다.");
+            if (!owner || !project || !url) return alert("빈칸을 채워주세요.");
+
+            await addData(owner, project, type, url);
+            alert("등록 완료!");
+            document.getElementById("inputProject").value = ""; // 일부 초기화
+            document.getElementById("inputUrl").value = "";
+        });
+
+        // 3. CSV Upload (일괄 등록)
+        document.getElementById("btnCsvUpload").addEventListener("click", () => {
+            const pw = document.getElementById("inputPw").value;
+            const fileInput = document.getElementById("csvFileInput");
+            const file = fileInput.files[0];
+
+            if (pw !== "1230") return alert("비밀번호(1230)를 입력창에 입력해주세요.");
+            if (!file) return alert("CSV 파일을 선택해주세요.");
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const text = e.target.result;
+                const lines = text.split("\n");
+                
+                let successCount = 0;
+                if(!confirm(`총 ${lines.length}줄의 데이터를 처리하시겠습니까?`)) return;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue; // 빈 줄 건너뛰기
+                    
+                    // CSV 파싱 (콤마 기준)
+                    const parts = line.split(",");
+                    if (parts.length < 4) continue; // 데이터 부족 시 건너뛰기
+
+                    // CSV 순서: 소유자, 프로젝트명, 유형, URL
+                    const owner = parts[0].trim();
+                    const project = parts[1].trim();
+                    const type = parts[2].trim();
+                    const url = parts[3].trim();
+
+                    // 제목행(Header)인 경우 건너뛰기 (예: '소유자'라는 글자가 있으면 스킵)
+                    if (owner === "소유자" || url === "웹주소") continue;
+
+                    await addData(owner, project, type, url);
+                    successCount++;
+                }
+                alert(`${successCount}건 업로드 완료!`);
+                fileInput.value = ""; // 파일 선택 초기화
+            };
+            reader.readAsText(file, "UTF-8"); // 한글 깨짐 방지
+        });
+
+        // 데이터 저장 공통 함수
+        async function addData(owner, project, type, url) {
+            try {
+                await addDoc(collection(db, COLLECTION_NAME), {
+                    owner: owner,
+                    project_name: project,
+                    type: type,
+                    url: url,
+                    createdAt: Timestamp.now()
+                });
+            } catch (e) {
+                console.error("Error:", e);
+            }
+        }
+    </script>
+</body>
+</html>
