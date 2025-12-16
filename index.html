@@ -34,26 +34,25 @@
         const { useState, useEffect, useRef } = React;
 
         // ==========================================
-        // [설정 구역] Firebase 설정을 여기에 채워주세요!
-        // 비워두면 '기본 데모 데이터'로 작동합니다.
+        // [설정 구역] Firebase 설정
         // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBiMp5UEmNviSazPRxb-5L60jJnELZL6S0",
-  authDomain: "ai-coding-collection.firebaseapp.com",
-  projectId: "ai-coding-collection",
-  storageBucket: "ai-coding-collection.firebasestorage.app",
-  messagingSenderId: "572754851302",
-  appId: "1:572754851302:web:22050169bb98eebaa3d227"
+            authDomain: "ai-coding-collection.firebaseapp.com",
+            projectId: "ai-coding-collection",
+            storageBucket: "ai-coding-collection.firebasestorage.app",
+            messagingSenderId: "572754851302",
+            appId: "1:572754851302:web:22050169bb98eebaa3d227"
         };
 
-        // Firebase 초기화 (설정이 있을 때만)
+        // Firebase 초기화
         let db = null;
         if (firebaseConfig.apiKey) {
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
         }
 
-        // 기본 데모 데이터 (DB 연결 안 됐을 때 표시)
+        // 기본 데모 데이터
         const DEMO_PROJECTS = [
             { id: 1, title: "모의투자 동아리 앱", desc: "React와 State를 활용해 만든 주식 매매 시뮬레이션", icon: "📈", color: "bg-purple-100 text-purple-600", link: "./Lv4_S01_Stock.html" },
             { id: 2, title: "우리 반 급식표", desc: "요일별 급식 메뉴를 확인하고 좋아요를 누르는 앱", icon: "🍱", color: "bg-orange-100 text-orange-600", link: "./Lv4_S02_Lunch.html" },
@@ -71,7 +70,6 @@
             const [uploadStatus, setUploadStatus] = useState("");
             const fileInputRef = useRef(null);
 
-            // DB 데이터 불러오기
             useEffect(() => {
                 if (db) {
                     const unsubscribe = db.collection("portfolio").orderBy("id").onSnapshot((snapshot) => {
@@ -90,7 +88,6 @@
                 });
             };
 
-            // 관리자 로그인 체크
             const checkPassword = () => {
                 if (password === "1230") {
                     setIsAdmin(true);
@@ -100,55 +97,73 @@
                 }
             };
 
-            // CSV 파일 파싱 및 업로드
+            // CSV 파일 처리 (개선됨)
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
 
                 if (!db) {
-                    alert("Firebase 설정이 되어있지 않아 DB에 저장할 수 없습니다.");
+                    alert("Firebase 설정 오류: DB에 저장할 수 없습니다.");
                     return;
                 }
 
                 const reader = new FileReader();
                 reader.onload = async (event) => {
-                    const text = event.target.result;
+                    let text = event.target.result;
+                    
+                    // 1. BOM 제거 (엑셀 저장 시 생기는 특수문자 제거)
+                    text = text.replace(/^\uFEFF/, ''); 
+
                     const rows = text.split('\n').slice(1); // 헤더 제외
                     
-                    setUploadStatus("업로드 중...");
+                    setUploadStatus("데이터 분석 중...");
                     const batch = db.batch();
+                    let count = 0;
 
                     rows.forEach((row, index) => {
-                        const cols = row.split(',');
-                        if (cols.length >= 5) {
+                        // 2. 따옴표 제거 및 공백 정리
+                        // 쉼표로 나누되, 데이터 안의 쉼표는 처리하지 못하므로 간단하게 split 사용
+                        // (복잡한 CSV는 엑셀에서 쉼표를 다른 문자로 바꿔서 저장하는 게 안전함)
+                        const cols = row.split(',').map(item => item ? item.trim().replace(/^"|"$/g, '') : '');
+                        
+                        if (cols.length >= 5 && cols[0]) {
                             const newDocRef = db.collection("portfolio").doc();
+                            
+                            // 3. 색상 클래스가 비어있으면 기본값 지정
+                            const colorClass = cols[3] || "bg-gray-100 text-gray-600";
+                            
                             batch.set(newDocRef, {
                                 id: Date.now() + index,
-                                title: cols[0].trim(),
-                                desc: cols[1].trim(),
-                                icon: cols[2].trim(),
-                                color: cols[3].trim(),
-                                link: cols[4].trim()
+                                title: cols[0],
+                                desc: cols[1],
+                                icon: cols[2], // 이모지
+                                color: colorClass,
+                                link: cols[4]
                             });
+                            count++;
                         }
                     });
 
+                    if (count === 0) {
+                        setUploadStatus("추가할 데이터가 없거나 형식이 잘못되었습니다.");
+                        return;
+                    }
+
                     try {
                         await batch.commit();
-                        setUploadStatus("업로드 성공! 🎉");
+                        setUploadStatus(`${count}개 업로드 성공! 🎉`);
                         setTimeout(() => setUploadStatus(""), 3000);
                         if(fileInputRef.current) fileInputRef.current.value = "";
                     } catch (error) {
                         console.error(error);
-                        setUploadStatus("업로드 실패 😭");
+                        setUploadStatus("업로드 중 오류 발생 😭");
                     }
                 };
                 reader.readAsText(file);
             };
 
-            // 항목 삭제
             const deleteProject = async (docId) => {
-                if (!db) return alert("데모 모드에서는 삭제할 수 없습니다.");
+                if (!db) return alert("데모 모드입니다.");
                 if (confirm("정말 삭제하시겠습니까?")) {
                     await db.collection("portfolio").doc(docId).delete();
                 }
@@ -156,7 +171,7 @@
 
             return (
                 <div className="min-h-screen pb-20">
-                    {/* Header Banner */}
+                    {/* Header */}
                     <div className="bg-indigo-600 text-white pt-20 pb-24 px-4 text-center relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-full opacity-10">
                             <i className="ph-fill ph-code text-9xl absolute -top-10 -left-10"></i>
@@ -171,22 +186,22 @@
                         </p>
                     </div>
 
-                    {/* Main Content (Cards) */}
+                    {/* Content */}
                     <div className="max-w-6xl mx-auto px-4 -mt-16 relative z-20">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             
                             {/* Profile Card */}
                             <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col items-center text-center border-t-4 border-indigo-500">
-                                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg -mt-16 mb-4 bg-gray-200">
+                                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg -mt-16 mb-4 bg-gray-200 shrink-0">
                                     <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Professor&clothing=blazerAndShirt&glasses=round" 
                                          alt="Profile" className="w-full h-full object-cover" />
                                 </div>
                                 <h2 className="text-xl font-bold text-gray-800 font-jua">김형태</h2>
                                 <p className="text-sm text-gray-500 mb-4">우송대학교 AI경영학과 학과장</p>
-                                <div className="flex gap-2 mb-4">
+                                <div className="flex gap-2 mb-4 justify-center flex-wrap">
                                     <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#React</span>
                                     <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#AI</span>
-                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#Education</span>
+                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#Edu</span>
                                 </div>
                                 <a href="mailto:contact@example.com" className="w-full py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
                                     <i className="ph-bold ph-envelope-simple mr-2"></i> 연락하기
@@ -195,29 +210,31 @@
 
                             {/* Project Cards */}
                             {projects.map((project) => (
-                                <div key={project.id} className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between card-hover transition-all duration-300 relative group">
-                                    {/* Admin Delete Button */}
+                                <div key={project.id} className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between card-hover transition-all duration-300 relative group h-full">
+                                    {/* Delete Button */}
                                     {isAdmin && db && project.docId && (
                                         <button 
                                             onClick={(e) => { e.preventDefault(); deleteProject(project.docId); }}
-                                            className="absolute top-2 right-2 bg-red-100 text-red-500 p-2 rounded-full hover:bg-red-500 hover:text-white transition z-30"
+                                            className="absolute top-2 right-2 bg-red-100 text-red-500 w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-500 hover:text-white transition z-30"
                                             title="삭제"
                                         >
                                             <i className="ph-bold ph-trash"></i>
                                         </button>
                                     )}
 
-                                    <div>
-                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-4 ${project.color}`}>
-                                            {project.icon}
+                                    <div className="flex flex-col flex-1">
+                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-4 shrink-0 ${project.color || 'bg-gray-100'}`}>
+                                            {project.icon || '📁'}
                                         </div>
-                                        <h3 className="text-xl font-bold text-gray-800 mb-2 font-jua">{project.title}</h3>
-                                        <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+                                        <h3 className="text-xl font-bold text-gray-800 mb-2 font-jua break-keep">
+                                            {project.title}
+                                        </h3>
+                                        <p className="text-gray-600 text-sm mb-6 leading-relaxed break-keep flex-1">
                                             {project.desc}
                                         </p>
                                     </div>
                                     
-                                    <div className="flex gap-2 mt-auto">
+                                    <div className="flex gap-2 mt-auto shrink-0">
                                         <a href={project.link} target="_blank" className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition flex items-center justify-center gap-2">
                                             <i className="ph-bold ph-play-circle text-lg"></i> 실행하기
                                         </a>
@@ -280,8 +297,8 @@
                                         <div className="bg-green-50 p-4 rounded-xl border border-green-200 text-center">
                                             <p className="text-green-700 font-bold mb-2">CSV 일괄 업로드</p>
                                             <p className="text-xs text-gray-500 mb-4">
-                                                형식: 제목, 설명, 아이콘, 색상클래스, 링크<br/>
-                                                (첫 줄은 헤더로 무시됩니다)
+                                                파일 형식: 제목,설명,아이콘,색상,링크<br/>
+                                                (쉼표로 구분, 따옴표 자동 제거됨)
                                             </p>
                                             <input 
                                                 type="file" 
@@ -291,11 +308,6 @@
                                                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-700 hover:file:bg-green-200 cursor-pointer"
                                             />
                                             {uploadStatus && <p className="mt-2 text-sm font-bold text-indigo-600">{uploadStatus}</p>}
-                                        </div>
-
-                                        <div className="text-center text-xs text-gray-400">
-                                            * DB가 연결되어야 삭제 및 업로드가 가능합니다.<br/>
-                                            * 목록의 빨간 휴지통 버튼으로 삭제하세요.
                                         </div>
                                         
                                         <button onClick={() => { setIsAdmin(false); setIsAdminOpen(false); }} className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-bold hover:bg-gray-300">
