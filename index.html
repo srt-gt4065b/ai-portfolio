@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>김형태님의 AI 코딩 포트폴리오</title>
+    <title>김형태 학과장 AI 코딩 포트폴리오</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -20,15 +20,15 @@
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
         .font-jua { font-family: 'Jua', sans-serif; }
-        .card-hover:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
+        .card-hover:hover { transform: translateY(-3px); box-shadow: 0 5px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
         .admin-btn { position: fixed; bottom: 20px; right: 20px; z-index: 50; }
         /* Modal Animation */
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .modal-content { animation: fadeIn 0.2s ease-out; }
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
     </style>
 </head>
@@ -166,20 +166,15 @@
                 setAdminTab("form");
             };
 
-            // [핵심] 강력한 CSV 파서 (쉼표/따옴표 완벽 처리)
             const parseCSV = (text) => {
                 const arr = []; 
                 let quote = false; 
                 let row = 0, col = 0, c = 0;
-                
-                // BOM 제거
                 if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-
                 for (; c < text.length; c++) {
                     let cc = text[c], nc = text[c+1];
                     arr[row] = arr[row] || []; 
                     arr[row][col] = arr[row][col] || ''; 
-                    
                     if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; }
                     else if (cc == '"') { quote = !quote; }
                     else if (cc == ',' && !quote) { ++col; }
@@ -198,30 +193,20 @@
                 reader.onload = async (event) => {
                     const text = event.target.result;
                     const rows = parseCSV(text);
-                    
-                    // 첫 줄(헤더) 제거 (단, 내용이 헤더같지 않으면 포함 가능)
                     const dataRows = rows.slice(1);
-                    
                     setUploadStatus("업로드 중...");
                     const batch = db.batch();
                     let count = 0;
-
                     dataRows.forEach((cols, index) => {
-                        // 빈 줄 무시
                         if (cols.length < 2 || !cols[0].trim()) return;
-
                         const newDocRef = db.collection("portfolio").doc();
                         batch.set(newDocRef, {
                             id: Date.now() + index,
-                            title: cols[0].trim(), 
-                            desc: cols[1].trim(), 
-                            icon: cols[2] ? cols[2].trim() : '📁', 
-                            color: cols[3] ? cols[3].trim() : "bg-gray-100 text-gray-600", 
-                            link: cols[4] ? cols[4].trim() : "#"
+                            title: cols[0].trim(), desc: cols[1].trim(), icon: cols[2] ? cols[2].trim() : '📁', 
+                            color: cols[3] ? cols[3].trim() : "bg-gray-100 text-gray-600", link: cols[4] ? cols[4].trim() : "#"
                         });
                         count++;
                     });
-
                     if (count > 0) {
                         await batch.commit();
                         setUploadStatus(`${count}개 업로드 완료!`);
@@ -229,7 +214,7 @@
                         setTimeout(() => setUploadStatus(""), 2000);
                         setAdminTab("list");
                     } else {
-                        setUploadStatus("데이터가 없거나 형식이 맞지 않습니다.");
+                        setUploadStatus("데이터 오류");
                     }
                 };
                 reader.readAsText(file);
@@ -237,66 +222,70 @@
 
             return (
                 <div className="min-h-screen pb-20">
-                    {/* --- Public View --- */}
-                    <div className="bg-indigo-600 text-white pt-20 pb-24 px-4 text-center relative overflow-hidden">
+                    {/* Header */}
+                    <div className="bg-indigo-600 text-white pt-16 pb-20 px-4 text-center relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-full opacity-10">
                             <i className="ph-fill ph-code text-9xl absolute -top-10 -left-10"></i>
                             <i className="ph-fill ph-brackets-curly text-9xl absolute bottom-0 right-0"></i>
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-bold font-jua mb-4 relative z-10">
+                        <h1 className="text-3xl md:text-4xl font-bold font-jua mb-3 relative z-10">
                             김형태의 코딩 포트폴리오
                         </h1>
-                        <p className="text-indigo-200 text-lg max-w-2xl mx-auto relative z-10">
+                        <p className="text-indigo-200 text-sm md:text-base max-w-2xl mx-auto relative z-10">
                             AI (Claude, ChatGPT, 제미나이) 도우미들과 함께 만든<br/>
                             재미있고 창의적인 웹 애플리케이션 컬렉션입니다.
                         </p>
                     </div>
 
-                    <div className="max-w-6xl mx-auto px-4 -mt-16 relative z-20">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="max-w-6xl mx-auto px-4 -mt-12 relative z-20">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {/* Profile Card */}
-                            <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col items-center text-center border-t-4 border-indigo-500">
-                                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg -mt-16 mb-4 bg-gray-200 shrink-0">
+                            <div className="bg-white rounded-xl shadow-lg p-5 flex flex-col items-center text-center border-t-4 border-indigo-500">
+                                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-md -mt-14 mb-3 bg-gray-200 shrink-0">
                                     <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Professor&clothing=blazerAndShirt&glasses=round" 
                                          alt="Profile" className="w-full h-full object-cover" />
                                 </div>
-                                <h2 className="text-xl font-bold text-gray-800 font-jua">김형태</h2>
-                                <p className="text-sm text-gray-500 mb-4">우송대학교 AI경영학과 학과장</p>
-                                <div className="flex gap-2 mb-4 justify-center flex-wrap">
-                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#React</span>
-                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#AI</span>
-                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#Edu</span>
+                                <h2 className="text-lg font-bold text-gray-800 font-jua">김형태</h2>
+                                <p className="text-xs text-gray-500 mb-3">우송대학교 AI경영학과 학과장</p>
+                                <div className="flex gap-1 mb-3 justify-center flex-wrap">
+                                    <span className="px-2 py-0.5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-600">#React</span>
+                                    <span className="px-2 py-0.5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-600">#AI</span>
+                                    <span className="px-2 py-0.5 bg-gray-100 rounded-full text-[10px] font-bold text-gray-600">#Edu</span>
                                 </div>
-                                <a href="mailto:contact@example.com" className="w-full py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
-                                    <i className="ph-bold ph-envelope-simple mr-2"></i> 연락하기
+                                <a href="mailto:contact@example.com" className="w-full py-1.5 border border-gray-300 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 transition">
+                                    <i className="ph-bold ph-envelope-simple mr-1"></i> 연락하기
                                 </a>
                             </div>
 
-                            {/* Project Cards */}
+                            {/* Project Cards (폰트 축소 적용됨) */}
                             {projects.map((project) => (
-                                <div key={project.id} className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between card-hover transition-all duration-300 relative group h-full">
+                                <div key={project.id} className="bg-white rounded-xl shadow p-4 flex flex-col justify-between card-hover transition-all duration-300 relative group h-full">
                                     <div className="flex flex-col flex-1">
-                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-4 shrink-0 ${project.color || 'bg-gray-100'}`}>
-                                            {project.icon || '📁'}
+                                        {/* 가로형 헤더바: 폰트 text-xs */}
+                                        <div className={`w-full p-2.5 rounded-lg flex items-center gap-2 mb-2 shrink-0 ${project.color || 'bg-gray-100'}`}>
+                                            <div className="text-lg shrink-0">
+                                                {project.icon || '📁'}
+                                            </div>
+                                            <h3 className="text-xs font-bold font-jua break-keep leading-tight">
+                                                {project.title}
+                                            </h3>
                                         </div>
-                                        {/* Public Title Font: text-sm (Smaller for consistency) */}
-                                        <h3 className="text-sm font-bold text-gray-800 mb-2 font-jua break-keep">
-                                            {project.title}
-                                        </h3>
-                                        <p className="text-gray-600 text-sm mb-6 leading-relaxed break-keep flex-1">
+                                        {/* 설명 폰트: text-[11px] */}
+                                        <p className="text-gray-500 text-[11px] mb-3 leading-relaxed break-keep flex-1 px-1">
                                             {project.desc}
                                         </p>
                                     </div>
+                                    
                                     <div className="flex gap-2 mt-auto shrink-0">
-                                        <a href={project.link} target="_blank" className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition flex items-center justify-center gap-2">
-                                            <i className="ph-bold ph-play-circle text-lg"></i> 실행하기
+                                        <a href={project.link} target="_blank" className="flex-1 bg-gray-900 text-white py-1.5 rounded-lg font-bold text-[11px] hover:bg-gray-800 transition flex items-center justify-center gap-1">
+                                            <i className="ph-bold ph-play-circle text-sm"></i> 실행
                                         </a>
                                         <button 
                                             onClick={() => copyToClipboard(project.link, project.id)}
-                                            className={`w-12 h-10 rounded-xl flex items-center justify-center transition border ${copiedId === project.id ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition border ${copiedId === project.id ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                                             title="링크 복사"
                                         >
-                                            {copiedId === project.id ? <i className="ph-bold ph-check"></i> : <i className="ph-bold ph-link"></i>}
+                                            {copiedId === project.id ? <i className="ph-bold ph-check text-sm"></i> : <i className="ph-bold ph-link text-sm"></i>}
                                         </button>
                                     </div>
                                 </div>
@@ -304,114 +293,110 @@
                         </div>
                     </div>
 
-                    <footer className="text-center mt-20 text-gray-400 text-sm">
+                    <footer className="text-center mt-10 text-gray-400 text-xs">
                         &copy; 2024 Kim Hyung Tae Portfolio. All rights reserved.
                     </footer>
 
                     <button 
                         onClick={() => setIsAdminOpen(true)}
-                        className="admin-btn bg-white text-gray-400 hover:text-indigo-600 p-3 rounded-full shadow-lg border border-gray-200 hover:border-indigo-500 transition-all opacity-70 hover:opacity-100"
+                        className="admin-btn bg-white text-gray-400 hover:text-indigo-600 p-2 rounded-full shadow border border-gray-200 hover:border-indigo-500 transition-all opacity-70 hover:opacity-100"
                     >
-                        <i className="ph-fill ph-gear text-2xl"></i>
+                        <i className="ph-fill ph-gear text-lg"></i>
                     </button>
 
+                    {/* Admin Dashboard */}
                     {isAdminOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-                            <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col modal-content relative">
+                            <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col modal-content relative">
                                 
-                                <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
-                                    <h2 className="text-xl font-bold font-jua flex items-center">
+                                <div className="bg-gray-900 text-white p-3 flex justify-between items-center shrink-0">
+                                    <h2 className="text-base font-bold font-jua flex items-center">
                                         <i className="ph-fill ph-lock-key text-yellow-400 mr-2"></i>
                                         관리자 대시보드
                                     </h2>
                                     <button onClick={() => setIsAdminOpen(false)} className="text-gray-400 hover:text-white transition">
-                                        <i className="ph-bold ph-x text-2xl"></i>
+                                        <i className="ph-bold ph-x text-lg"></i>
                                     </button>
                                 </div>
 
                                 {!isAdmin ? (
                                     <div className="flex-1 flex flex-col items-center justify-center p-8">
-                                        <div className="w-full max-w-xs space-y-4">
-                                            <p className="text-center text-gray-600 font-bold">비밀번호를 입력하세요.</p>
+                                        <div className="w-full max-w-xs space-y-3">
+                                            <p className="text-center text-gray-600 font-bold text-sm">비밀번호를 입력하세요.</p>
                                             <input 
                                                 type="password" 
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
                                                 onKeyPress={(e) => e.key === 'Enter' && checkPassword()}
-                                                className="w-full p-3 border-2 border-gray-200 rounded-lg text-center text-xl font-bold tracking-widest focus:border-indigo-500 focus:outline-none"
+                                                className="w-full p-2 border-2 border-gray-200 rounded-lg text-center text-lg font-bold tracking-widest focus:border-indigo-500 focus:outline-none"
                                                 placeholder="****"
                                                 autoFocus
                                             />
-                                            <button onClick={checkPassword} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition">
+                                            <button onClick={checkPassword} className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700 transition text-sm">
                                                 접속하기
                                             </button>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="flex flex-1 overflow-hidden">
-                                        <div className="w-48 bg-gray-50 border-r border-gray-200 p-4 flex flex-col gap-2 shrink-0">
-                                            <button onClick={() => setAdminTab("list")} className={`p-3 rounded-lg text-left font-bold text-sm flex items-center ${adminTab==='list' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                        <div className="w-40 bg-gray-50 border-r border-gray-200 p-3 flex flex-col gap-1 shrink-0">
+                                            <button onClick={() => setAdminTab("list")} className={`p-2 rounded-lg text-left font-bold text-xs flex items-center ${adminTab==='list' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
                                                 <i className="ph-bold ph-list-dashes mr-2"></i> 목록 관리
                                             </button>
-                                            <button onClick={startCreate} className={`p-3 rounded-lg text-left font-bold text-sm flex items-center ${adminTab==='form' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                            <button onClick={startCreate} className={`p-2 rounded-lg text-left font-bold text-xs flex items-center ${adminTab==='form' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
                                                 <i className="ph-bold ph-plus-circle mr-2"></i> 개별 추가
                                             </button>
-                                            <button onClick={() => setAdminTab("csv")} className={`p-3 rounded-lg text-left font-bold text-sm flex items-center ${adminTab==='csv' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                            <button onClick={() => setAdminTab("csv")} className={`p-2 rounded-lg text-left font-bold text-xs flex items-center ${adminTab==='csv' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
                                                 <i className="ph-bold ph-file-csv mr-2"></i> 일괄 업로드
                                             </button>
                                             <div className="mt-auto">
-                                                <button onClick={() => { setIsAdmin(false); setIsAdminOpen(false); }} className="w-full p-2 rounded border border-gray-300 text-gray-500 text-xs hover:bg-red-50 hover:text-red-500 hover:border-red-200 font-bold">
+                                                <button onClick={() => { setIsAdmin(false); setIsAdminOpen(false); }} className="w-full p-1.5 rounded border border-gray-300 text-gray-500 text-[10px] hover:bg-red-50 hover:text-red-500 hover:border-red-200 font-bold">
                                                     로그아웃
                                                 </button>
                                             </div>
                                         </div>
 
-                                        <div className="flex-1 p-6 overflow-y-auto bg-white">
-                                            
+                                        <div className="flex-1 p-4 overflow-y-auto bg-white">
                                             {adminTab === 'list' && (
                                                 <div className="h-full flex flex-col">
-                                                    <div className="flex justify-between items-center mb-4">
-                                                        <h3 className="font-bold text-lg">프로젝트 목록 ({projects.length})</h3>
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <h3 className="font-bold text-sm">프로젝트 목록 ({projects.length})</h3>
                                                     </div>
-
                                                     <div className="border rounded-lg overflow-hidden flex-1">
-                                                        <table className="w-full text-sm text-left">
-                                                            <thead className="bg-gray-100 text-gray-600 uppercase font-bold text-xs">
+                                                        <table className="w-full text-xs text-left">
+                                                            <thead className="bg-gray-100 text-gray-600 uppercase font-bold text-[10px]">
                                                                 <tr>
-                                                                    <th className="p-3 w-[85%]">제목 / 설명</th>
-                                                                    <th className="p-3 w-[15%] text-center">관리</th>
+                                                                    <th className="p-2 w-[85%]">제목 / 설명</th>
+                                                                    <th className="p-2 w-[15%] text-center">관리</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-gray-100">
                                                                 {projects.map(p => (
                                                                     <tr key={p.id} className="hover:bg-gray-50 group">
-                                                                        <td className="p-3">
-                                                                            <div className="flex items-start gap-3">
+                                                                        <td className="p-2">
+                                                                            <div className="flex items-start gap-2">
                                                                                 <div className="flex-1 min-w-0">
                                                                                     <div className="flex items-center gap-2">
-                                                                                        <span className="text-lg">{p.icon}</span>
-                                                                                        <span className="font-bold text-gray-800 text-sm">{p.title}</span>
+                                                                                        <span className="text-base">{p.icon}</span>
+                                                                                        <span className="font-bold text-gray-800 text-xs">{p.title}</span>
                                                                                     </div>
-                                                                                    <div className="text-xs text-gray-500 truncate mt-1 pl-7">{p.desc}</div>
-                                                                                    <a href={p.link} target="_blank" className="text-xs text-indigo-400 hover:underline pl-7 block">{p.link}</a>
+                                                                                    <div className="text-[10px] text-gray-500 truncate mt-0.5 pl-6">{p.desc}</div>
+                                                                                    <a href={p.link} target="_blank" className="text-[10px] text-indigo-400 hover:underline pl-6 block">{p.link}</a>
                                                                                 </div>
                                                                             </div>
                                                                         </td>
-                                                                        <td className="p-3 text-center space-x-2 align-top pt-3">
+                                                                        <td className="p-2 text-center space-x-1 align-top pt-2">
                                                                             {p.docId ? (
                                                                                 <>
-                                                                                    <button onClick={() => startEdit(p)} className="text-gray-400 hover:text-indigo-600"><i className="ph-bold ph-pencil-simple"></i></button>
-                                                                                    <button onClick={() => handleDelete(p.docId)} className="text-gray-400 hover:text-red-600"><i className="ph-bold ph-trash"></i></button>
+                                                                                    <button onClick={() => startEdit(p)} className="text-gray-400 hover:text-indigo-600"><i className="ph-bold ph-pencil-simple text-sm"></i></button>
+                                                                                    <button onClick={() => handleDelete(p.docId)} className="text-gray-400 hover:text-red-600"><i className="ph-bold ph-trash text-sm"></i></button>
                                                                                 </>
                                                                             ) : (
-                                                                                <span className="text-xs text-gray-300 bg-gray-100 px-1 rounded">Demo</span>
+                                                                                <span className="text-[9px] text-gray-300 bg-gray-100 px-1 rounded">Demo</span>
                                                                             )}
                                                                         </td>
                                                                     </tr>
                                                                 ))}
-                                                                {projects.length === 0 && (
-                                                                    <tr><td colSpan="2" className="p-8 text-center text-gray-400">데이터가 없습니다.</td></tr>
-                                                                )}
                                                             </tbody>
                                                         </table>
                                                     </div>
@@ -419,42 +404,41 @@
                                             )}
 
                                             {adminTab === 'form' && (
-                                                <div className="max-w-lg mx-auto">
-                                                    <h3 className="font-bold text-lg mb-6 border-b pb-2">
+                                                <div className="max-w-md mx-auto">
+                                                    <h3 className="font-bold text-sm mb-4 border-b pb-1">
                                                         {editTarget ? "프로젝트 수정" : "새 프로젝트 추가"}
                                                     </h3>
-                                                    <div className="space-y-4">
+                                                    <div className="space-y-3">
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-500 mb-1">제목</label>
-                                                            <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                            <label className="block text-[10px] font-bold text-gray-500 mb-1">제목</label>
+                                                            <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
                                                                 value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="예: 급식표 앱" />
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-500 mb-1">설명</label>
-                                                            <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                                                value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} placeholder="앱에 대한 간단한 설명" />
+                                                            <label className="block text-[10px] font-bold text-gray-500 mb-1">설명</label>
+                                                            <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} placeholder="설명" />
                                                         </div>
-                                                        <div className="flex gap-4">
+                                                        <div className="flex gap-3">
                                                             <div className="flex-1">
-                                                                <label className="block text-xs font-bold text-gray-500 mb-1">아이콘 (이모지)</label>
-                                                                <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none text-center" 
+                                                                <label className="block text-[10px] font-bold text-gray-500 mb-1">아이콘</label>
+                                                                <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none text-center" 
                                                                     value={formData.icon} onChange={e => setFormData({...formData, icon: e.target.value})} placeholder="🍱" />
                                                             </div>
                                                             <div className="flex-[2]">
-                                                                <label className="block text-xs font-bold text-gray-500 mb-1">색상 테마 (Tailwind)</label>
-                                                                <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                <label className="block text-[10px] font-bold text-gray-500 mb-1">색상 (Tailwind)</label>
+                                                                <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
                                                                     value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} placeholder="bg-blue-100 text-blue-600" />
                                                             </div>
                                                         </div>
                                                         <div>
-                                                            <label className="block text-xs font-bold text-gray-500 mb-1">링크 (URL)</label>
-                                                            <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                            <label className="block text-[10px] font-bold text-gray-500 mb-1">링크</label>
+                                                            <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
                                                                 value={formData.link} onChange={e => setFormData({...formData, link: e.target.value})} placeholder="./Lv4_S02_Lunch.html" />
                                                         </div>
-                                                        
-                                                        <div className="pt-4 flex gap-2">
-                                                            <button onClick={() => setAdminTab("list")} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-300">취소</button>
-                                                            <button onClick={handleFormSubmit} className="flex-[2] bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-lg">
+                                                        <div className="pt-2 flex gap-2">
+                                                            <button onClick={() => setAdminTab("list")} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded text-xs font-bold hover:bg-gray-300">취소</button>
+                                                            <button onClick={handleFormSubmit} className="flex-[2] bg-indigo-600 text-white py-2 rounded text-xs font-bold hover:bg-indigo-700 shadow">
                                                                 {editTarget ? "수정 완료" : "추가하기"}
                                                             </button>
                                                         </div>
@@ -463,36 +447,34 @@
                                             )}
 
                                             {adminTab === 'csv' && (
-                                                <div className="max-w-lg mx-auto text-center pt-8">
-                                                    <div className="bg-green-50 border-2 border-dashed border-green-300 rounded-xl p-8 mb-6">
-                                                        <i className="ph-duotone ph-file-csv text-6xl text-green-500 mb-4"></i>
-                                                        <h3 className="text-xl font-bold text-green-800 mb-2">CSV 파일 일괄 업로드</h3>
-                                                        <p className="text-sm text-gray-600 mb-6">
-                                                            엑셀 내용을 한 번에 DB에 저장합니다.<br/>
-                                                            <span className="text-xs text-gray-400">(형식: 제목, 설명, 아이콘, 색상, 링크)</span>
+                                                <div className="max-w-md mx-auto text-center pt-4">
+                                                    <div className="bg-green-50 border-2 border-dashed border-green-300 rounded-lg p-6 mb-4">
+                                                        <i className="ph-duotone ph-file-csv text-4xl text-green-500 mb-2"></i>
+                                                        <h3 className="text-sm font-bold text-green-800 mb-1">CSV 일괄 업로드</h3>
+                                                        <p className="text-[10px] text-gray-600 mb-4">
+                                                            형식: 제목,설명,아이콘,색상,링크
                                                         </p>
                                                         <input 
                                                             type="file" 
                                                             accept=".csv"
                                                             ref={fileInputRef}
                                                             onChange={handleCsvUpload}
-                                                            className="block w-full text-sm text-gray-500
-                                                                file:mr-4 file:py-2 file:px-4
+                                                            className="block w-full text-[10px] text-gray-500
+                                                                file:mr-2 file:py-1 file:px-3
                                                                 file:rounded-full file:border-0
-                                                                file:text-sm file:font-semibold
+                                                                file:text-[10px] file:font-semibold
                                                                 file:bg-green-100 file:text-green-700
                                                                 hover:file:bg-green-200 cursor-pointer mx-auto max-w-xs
                                                             "
                                                         />
                                                     </div>
                                                     {uploadStatus && (
-                                                        <div className="bg-indigo-50 text-indigo-700 p-3 rounded-lg font-bold animate-pulse">
+                                                        <div className="bg-indigo-50 text-indigo-700 p-2 rounded text-xs font-bold animate-pulse">
                                                             {uploadStatus}
                                                         </div>
                                                     )}
                                                 </div>
                                             )}
-
                                         </div>
                                     </div>
                                 )}
