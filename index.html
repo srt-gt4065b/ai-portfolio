@@ -3,87 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>프로젝트 관리 시스템 (CSV지원)</title>
+    <title>김형태님의 AI 코딩 포트폴리오</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
-        body { font-family: 'Noto Sans KR', sans-serif; }
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
+        .font-jua { font-family: 'Jua', sans-serif; }
+        .card-hover:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
+        .admin-btn { position: fixed; bottom: 20px; right: 20px; z-index: 50; }
+        /* Modal Animation */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-overlay { animation: fadeIn 0.3s ease-out; }
     </style>
 </head>
-<body class="bg-gray-100 p-4 lg:p-10">
+<body>
+    <div id="root"></div>
 
-    <div class="max-w-7xl mx-auto">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold text-indigo-700">학생 프로젝트 관리 시스템</h1>
-            <p class="text-gray-500 mt-2">Firebase Firestore + CSV 일괄 업로드</p>
-        </header>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-        <div class="bg-white rounded-xl shadow-md p-6 mb-4 border border-gray-200">
-            <h2 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2">✏️ 개별 프로젝트 등록</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <input type="text" id="inputOwner" placeholder="소유자 (예: 홍길동)" class="border p-2 rounded">
-                <input type="text" id="inputProject" placeholder="프로젝트명" class="border p-2 rounded">
-                <select id="inputType" class="border p-2 rounded">
-                    <option value="Game">Game</option>
-                    <option value="강의용">강의용</option>
-                    <option value="강의용 Game">강의용 Game</option>
-                </select>
-                <input type="text" id="inputUrl" placeholder="웹 주소 (https://...)" class="border p-2 rounded">
-                <input type="password" id="inputPw" placeholder="비밀번호 (1230)" class="border p-2 rounded bg-yellow-50">
-            </div>
-            <div class="mt-4 text-right">
-                <button id="btnAdd" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded font-bold shadow-lg">
-                    개별 등록하기
-                </button>
-            </div>
-        </div>
-
-        <div class="bg-gray-50 rounded-xl shadow-inner p-6 mb-8 border border-gray-300">
-            <h2 class="text-lg font-bold mb-4 text-gray-700 border-b pb-2">📂 CSV 일괄 업로드</h2>
-            <div class="flex flex-col md:flex-row gap-4 items-center justify-between">
-                <div class="flex-grow">
-                    <p class="text-sm text-gray-500 mb-2">
-                        * CSV 형식: <strong>소유자,프로젝트명,유형,웹주소</strong> 순서 (헤더 제외)<br>
-                        * 주의: 업로드 시 비밀번호(1230)가 위 입력창에 입력되어 있어야 합니다.
-                    </p>
-                    <input type="file" id="csvFileInput" accept=".csv" class="block w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-full file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-green-50 file:text-green-700
-                        hover:file:bg-green-100 cursor-pointer border rounded bg-white
-                    "/>
-                </div>
-                <button id="btnCsvUpload" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded font-bold shadow-lg h-10">
-                    CSV 업로드 시작
-                </button>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <table class="min-w-full leading-normal">
-                <thead>
-                    <tr>
-                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">소유자</th>
-                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">프로젝트명</th>
-                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-center text-xs font-semibold text-gray-600 uppercase">유형</th>
-                        <th class="px-5 py-3 border-b-2 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase">웹 주소</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <tr><td colspan="4" class="text-center py-10">로딩중...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-
-        // ------------------------------------------------------------------
-        // [설정] 본인의 Firebase Config를 붙여넣으세요
-        // ------------------------------------------------------------------
+        // ==========================================
+        // [설정 구역] Firebase 설정을 여기에 채워주세요!
+        // 비워두면 '기본 데모 데이터'로 작동합니다.
+        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBiMp5UEmNviSazPRxb-5L60jJnELZL6S0",
   authDomain: "ai-coding-collection.firebaseapp.com",
@@ -93,115 +46,272 @@
   appId: "1:572754851302:web:22050169bb98eebaa3d227"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const COLLECTION_NAME = "student_projects";
-
-        // 1. Read (실시간 목록)
-        const tableBody = document.getElementById("tableBody");
-        const q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
-
-        onSnapshot(q, (snapshot) => {
-            tableBody.innerHTML = "";
-            if (snapshot.empty) {
-                tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-10">데이터 없음</td></tr>`;
-                return;
-            }
-            snapshot.forEach((doc) => {
-                const data = doc.data();
-                let badge = "bg-gray-200 text-gray-800";
-                if(data.type.includes("Game")) badge = "bg-blue-100 text-blue-800";
-                if(data.type.includes("강의용")) badge = "bg-red-100 text-red-800";
-                
-                tableBody.innerHTML += `
-                    <tr>
-                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm font-bold">${data.owner}</td>
-                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">${data.project_name}</td>
-                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm text-center">
-                            <span class="px-3 py-1 font-semibold ${badge} rounded-full text-xs">${data.type}</span>
-                        </td>
-                        <td class="px-5 py-5 border-b border-gray-200 bg-white text-sm">
-                            <a href="${data.url}" target="_blank" class="text-indigo-600 underline">이동</a>
-                        </td>
-                    </tr>
-                `;
-            });
-        });
-
-        // 2. Create (개별 등록)
-        document.getElementById("btnAdd").addEventListener("click", async () => {
-            const owner = document.getElementById("inputOwner").value;
-            const project = document.getElementById("inputProject").value;
-            const type = document.getElementById("inputType").value;
-            const url = document.getElementById("inputUrl").value;
-            const pw = document.getElementById("inputPw").value;
-
-            if (pw !== "1230") return alert("비밀번호가 틀렸습니다.");
-            if (!owner || !project || !url) return alert("빈칸을 채워주세요.");
-
-            await addData(owner, project, type, url);
-            alert("등록 완료!");
-            document.getElementById("inputProject").value = ""; // 일부 초기화
-            document.getElementById("inputUrl").value = "";
-        });
-
-        // 3. CSV Upload (일괄 등록)
-        document.getElementById("btnCsvUpload").addEventListener("click", () => {
-            const pw = document.getElementById("inputPw").value;
-            const fileInput = document.getElementById("csvFileInput");
-            const file = fileInput.files[0];
-
-            if (pw !== "1230") return alert("비밀번호(1230)를 입력창에 입력해주세요.");
-            if (!file) return alert("CSV 파일을 선택해주세요.");
-
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result;
-                const lines = text.split("\n");
-                
-                let successCount = 0;
-                if(!confirm(`총 ${lines.length}줄의 데이터를 처리하시겠습니까?`)) return;
-
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue; // 빈 줄 건너뛰기
-                    
-                    // CSV 파싱 (콤마 기준)
-                    const parts = line.split(",");
-                    if (parts.length < 4) continue; // 데이터 부족 시 건너뛰기
-
-                    // CSV 순서: 소유자, 프로젝트명, 유형, URL
-                    const owner = parts[0].trim();
-                    const project = parts[1].trim();
-                    const type = parts[2].trim();
-                    const url = parts[3].trim();
-
-                    // 제목행(Header)인 경우 건너뛰기 (예: '소유자'라는 글자가 있으면 스킵)
-                    if (owner === "소유자" || url === "웹주소") continue;
-
-                    await addData(owner, project, type, url);
-                    successCount++;
-                }
-                alert(`${successCount}건 업로드 완료!`);
-                fileInput.value = ""; // 파일 선택 초기화
-            };
-            reader.readAsText(file, "UTF-8"); // 한글 깨짐 방지
-        });
-
-        // 데이터 저장 공통 함수
-        async function addData(owner, project, type, url) {
-            try {
-                await addDoc(collection(db, COLLECTION_NAME), {
-                    owner: owner,
-                    project_name: project,
-                    type: type,
-                    url: url,
-                    createdAt: Timestamp.now()
-                });
-            } catch (e) {
-                console.error("Error:", e);
-            }
+        // Firebase 초기화 (설정이 있을 때만)
+        let db = null;
+        if (firebaseConfig.apiKey) {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
         }
+
+        // 기본 데모 데이터 (DB 연결 안 됐을 때 표시)
+        const DEMO_PROJECTS = [
+            { id: 1, title: "모의투자 동아리 앱", desc: "React와 State를 활용해 만든 주식 매매 시뮬레이션", icon: "📈", color: "bg-purple-100 text-purple-600", link: "./Lv4_S01_Stock.html" },
+            { id: 2, title: "우리 반 급식표", desc: "요일별 급식 메뉴를 확인하고 좋아요를 누르는 앱", icon: "🍱", color: "bg-orange-100 text-orange-600", link: "./Lv4_S02_Lunch.html" },
+            { id: 3, title: "영원한 방명록", desc: "새로고침해도 사라지지 않는 로컬 스토리지 DB 실습", icon: "📝", color: "bg-yellow-100 text-yellow-600", link: "./Lv5_S01_Guestbook.html" },
+            { id: 4, title: "AI 봇 채팅방", desc: "실시간으로 대화하는 듯한 채팅 UI 구현", icon: "💬", color: "bg-blue-100 text-blue-600", link: "./Lv5_S02_Chat.html" },
+            { id: 5, title: "수료증 발급기", desc: "과정을 마치고 이름을 입력하면 상장이 나오는 앱", icon: "🎓", color: "bg-green-100 text-green-600", link: "./Lv6_S02_Graduation.html" }
+        ];
+
+        const App = () => {
+            const [projects, setProjects] = useState(DEMO_PROJECTS);
+            const [copiedId, setCopiedId] = useState(null);
+            const [isAdminOpen, setIsAdminOpen] = useState(false);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [password, setPassword] = useState("");
+            const [uploadStatus, setUploadStatus] = useState("");
+            const fileInputRef = useRef(null);
+
+            // DB 데이터 불러오기
+            useEffect(() => {
+                if (db) {
+                    const unsubscribe = db.collection("portfolio").orderBy("id").onSnapshot((snapshot) => {
+                        const dbProjects = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+                        if(dbProjects.length > 0) setProjects(dbProjects);
+                    });
+                    return () => unsubscribe();
+                }
+            }, []);
+
+            const copyToClipboard = (link, id) => {
+                const fullUrl = new URL(link, window.location.href).href;
+                navigator.clipboard.writeText(fullUrl).then(() => {
+                    setCopiedId(id);
+                    setTimeout(() => setCopiedId(null), 2000);
+                });
+            };
+
+            // 관리자 로그인 체크
+            const checkPassword = () => {
+                if (password === "1230") {
+                    setIsAdmin(true);
+                    setPassword("");
+                } else {
+                    alert("비밀번호가 틀렸습니다!");
+                }
+            };
+
+            // CSV 파일 파싱 및 업로드
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                if (!db) {
+                    alert("Firebase 설정이 되어있지 않아 DB에 저장할 수 없습니다.");
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const text = event.target.result;
+                    const rows = text.split('\n').slice(1); // 헤더 제외
+                    
+                    setUploadStatus("업로드 중...");
+                    const batch = db.batch();
+
+                    rows.forEach((row, index) => {
+                        const cols = row.split(',');
+                        if (cols.length >= 5) {
+                            const newDocRef = db.collection("portfolio").doc();
+                            batch.set(newDocRef, {
+                                id: Date.now() + index,
+                                title: cols[0].trim(),
+                                desc: cols[1].trim(),
+                                icon: cols[2].trim(),
+                                color: cols[3].trim(),
+                                link: cols[4].trim()
+                            });
+                        }
+                    });
+
+                    try {
+                        await batch.commit();
+                        setUploadStatus("업로드 성공! 🎉");
+                        setTimeout(() => setUploadStatus(""), 3000);
+                        if(fileInputRef.current) fileInputRef.current.value = "";
+                    } catch (error) {
+                        console.error(error);
+                        setUploadStatus("업로드 실패 😭");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            // 항목 삭제
+            const deleteProject = async (docId) => {
+                if (!db) return alert("데모 모드에서는 삭제할 수 없습니다.");
+                if (confirm("정말 삭제하시겠습니까?")) {
+                    await db.collection("portfolio").doc(docId).delete();
+                }
+            };
+
+            return (
+                <div className="min-h-screen pb-20">
+                    {/* Header Banner */}
+                    <div className="bg-indigo-600 text-white pt-20 pb-24 px-4 text-center relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-full opacity-10">
+                            <i className="ph-fill ph-code text-9xl absolute -top-10 -left-10"></i>
+                            <i className="ph-fill ph-brackets-curly text-9xl absolute bottom-0 right-0"></i>
+                        </div>
+                        <h1 className="text-4xl md:text-5xl font-bold font-jua mb-4 relative z-10">
+                            김형태의 코딩 포트폴리오
+                        </h1>
+                        <p className="text-indigo-200 text-lg max-w-2xl mx-auto relative z-10">
+                            AI (Claude, ChatGPT, 제미나이) 도우미들과 함께 만든<br/>
+                            재미있고 창의적인 웹 애플리케이션 컬렉션입니다.
+                        </p>
+                    </div>
+
+                    {/* Main Content (Cards) */}
+                    <div className="max-w-6xl mx-auto px-4 -mt-16 relative z-20">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            
+                            {/* Profile Card */}
+                            <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col items-center text-center border-t-4 border-indigo-500">
+                                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg -mt-16 mb-4 bg-gray-200">
+                                    <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Professor&clothing=blazerAndShirt&glasses=round" 
+                                         alt="Profile" className="w-full h-full object-cover" />
+                                </div>
+                                <h2 className="text-xl font-bold text-gray-800 font-jua">김형태</h2>
+                                <p className="text-sm text-gray-500 mb-4">우송대학교 AI경영학과 학과장</p>
+                                <div className="flex gap-2 mb-4">
+                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#React</span>
+                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#AI</span>
+                                    <span className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600">#Education</span>
+                                </div>
+                                <a href="mailto:contact@example.com" className="w-full py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
+                                    <i className="ph-bold ph-envelope-simple mr-2"></i> 연락하기
+                                </a>
+                            </div>
+
+                            {/* Project Cards */}
+                            {projects.map((project) => (
+                                <div key={project.id} className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between card-hover transition-all duration-300 relative group">
+                                    {/* Admin Delete Button */}
+                                    {isAdmin && db && project.docId && (
+                                        <button 
+                                            onClick={(e) => { e.preventDefault(); deleteProject(project.docId); }}
+                                            className="absolute top-2 right-2 bg-red-100 text-red-500 p-2 rounded-full hover:bg-red-500 hover:text-white transition z-30"
+                                            title="삭제"
+                                        >
+                                            <i className="ph-bold ph-trash"></i>
+                                        </button>
+                                    )}
+
+                                    <div>
+                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-4 ${project.color}`}>
+                                            {project.icon}
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-800 mb-2 font-jua">{project.title}</h3>
+                                        <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+                                            {project.desc}
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="flex gap-2 mt-auto">
+                                        <a href={project.link} target="_blank" className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition flex items-center justify-center gap-2">
+                                            <i className="ph-bold ph-play-circle text-lg"></i> 실행하기
+                                        </a>
+                                        <button 
+                                            onClick={() => copyToClipboard(project.link, project.id)}
+                                            className={`w-12 h-10 rounded-xl flex items-center justify-center transition border ${copiedId === project.id ? 'bg-green-50 border-green-200 text-green-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                            title="링크 복사"
+                                        >
+                                            {copiedId === project.id ? <i className="ph-bold ph-check"></i> : <i className="ph-bold ph-link"></i>}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+
+                        </div>
+                    </div>
+
+                    <footer className="text-center mt-20 text-gray-400 text-sm">
+                        &copy; 2024 Kim Hyung Tae Portfolio. All rights reserved.
+                    </footer>
+
+                    {/* Admin Button */}
+                    <button 
+                        onClick={() => setIsAdminOpen(true)}
+                        className="admin-btn bg-gray-200 text-gray-500 hover:bg-gray-800 hover:text-white p-3 rounded-full shadow-lg transition-all opacity-50 hover:opacity-100"
+                    >
+                        <i className="ph-fill ph-gear text-xl"></i>
+                    </button>
+
+                    {/* Admin Modal */}
+                    {isAdminOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-overlay backdrop-blur-sm">
+                            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl relative">
+                                <button onClick={() => setIsAdminOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                                    <i className="ph-bold ph-x text-xl"></i>
+                                </button>
+
+                                <h2 className="text-2xl font-bold font-jua mb-6 text-center text-gray-800">
+                                    <i className="ph-fill ph-lock-key text-yellow-500 mr-2"></i>
+                                    관리자 모드
+                                </h2>
+
+                                {!isAdmin ? (
+                                    <div className="space-y-4">
+                                        <p className="text-center text-gray-600 text-sm">관리자 비밀번호를 입력하세요.</p>
+                                        <input 
+                                            type="password" 
+                                            value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && checkPassword()}
+                                            className="w-full p-3 border border-gray-300 rounded-lg text-center font-bold tracking-widest focus:border-indigo-500 focus:outline-none"
+                                            placeholder="****"
+                                        />
+                                        <button onClick={checkPassword} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition">
+                                            확인
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        <div className="bg-green-50 p-4 rounded-xl border border-green-200 text-center">
+                                            <p className="text-green-700 font-bold mb-2">CSV 일괄 업로드</p>
+                                            <p className="text-xs text-gray-500 mb-4">
+                                                형식: 제목, 설명, 아이콘, 색상클래스, 링크<br/>
+                                                (첫 줄은 헤더로 무시됩니다)
+                                            </p>
+                                            <input 
+                                                type="file" 
+                                                accept=".csv"
+                                                ref={fileInputRef}
+                                                onChange={handleFileUpload}
+                                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-700 hover:file:bg-green-200 cursor-pointer"
+                                            />
+                                            {uploadStatus && <p className="mt-2 text-sm font-bold text-indigo-600">{uploadStatus}</p>}
+                                        </div>
+
+                                        <div className="text-center text-xs text-gray-400">
+                                            * DB가 연결되어야 삭제 및 업로드가 가능합니다.<br/>
+                                            * 목록의 빨간 휴지통 버튼으로 삭제하세요.
+                                        </div>
+                                        
+                                        <button onClick={() => { setIsAdmin(false); setIsAdminOpen(false); }} className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-bold hover:bg-gray-300">
+                                            관리자 로그아웃
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
