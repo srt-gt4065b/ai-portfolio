@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>김형태 학과장 AI 코딩 포트폴리오</title>
+    <title>김형태님의 AI 코딩 포트폴리오</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -362,7 +362,8 @@
                                                     <div className="flex justify-between items-center mb-3">
                                                         <h3 className="font-bold text-sm">프로젝트 목록 ({projects.length})</h3>
                                                     </div>
-                                                    <div className="border rounded-lg overflow-hidden flex-1">
+                                                    {/* Scroll Fix: overflow-y-auto */}
+                                                    <div className="border rounded-lg overflow-y-auto flex-1">
                                                         <table className="w-full text-xs text-left">
                                                             <thead className="bg-gray-100 text-gray-600 uppercase font-bold text-[10px]">
                                                                 <tr>
