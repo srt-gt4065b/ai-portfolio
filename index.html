@@ -23,8 +23,13 @@
         .card-hover:hover { transform: translateY(-5px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
         .admin-btn { position: fixed; bottom: 20px; right: 20px; z-index: 50; }
         /* Modal Animation */
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .modal-overlay { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .modal-content { animation: fadeIn 0.2s ease-out; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
     </style>
 </head>
 <body>
@@ -48,7 +53,9 @@
         // Firebase 초기화
         let db = null;
         if (firebaseConfig.apiKey) {
-            firebase.initializeApp(firebaseConfig);
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
             db = firebase.firestore();
         }
 
@@ -64,17 +71,27 @@
         const App = () => {
             const [projects, setProjects] = useState(DEMO_PROJECTS);
             const [copiedId, setCopiedId] = useState(null);
+            
+            // Admin State
             const [isAdminOpen, setIsAdminOpen] = useState(false);
             const [isAdmin, setIsAdmin] = useState(false);
             const [password, setPassword] = useState("");
+            const [adminTab, setAdminTab] = useState("list"); 
+            
+            // Edit/Create State
+            const [editTarget, setEditTarget] = useState(null);
+            const [formData, setFormData] = useState({ title: "", desc: "", icon: "", color: "bg-gray-100 text-gray-600", link: "" });
+            
             const [uploadStatus, setUploadStatus] = useState("");
             const fileInputRef = useRef(null);
 
             useEffect(() => {
                 if (db) {
-                    const unsubscribe = db.collection("portfolio").orderBy("id").onSnapshot((snapshot) => {
+                    const unsubscribe = db.collection("portfolio").orderBy("id", "desc").onSnapshot((snapshot) => {
                         const dbProjects = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-                        if(dbProjects.length > 0) setProjects(dbProjects);
+                        if(snapshot.size > 0 || dbProjects.length === 0) {
+                             setProjects(dbProjects);
+                        }
                     });
                     return () => unsubscribe();
                 }
@@ -97,81 +114,100 @@
                 }
             };
 
-            // CSV 파일 처리 (개선됨)
-            const handleFileUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                if (!db) {
-                    alert("Firebase 설정 오류: DB에 저장할 수 없습니다.");
-                    return;
+            const handleDelete = async (docId) => {
+                if (!db) return alert("데모 모드에서는 삭제할 수 없습니다.");
+                if (!confirm(`정말 삭제하시겠습니까?`)) return;
+                try {
+                    await db.collection("portfolio").doc(docId).delete();
+                    alert("삭제되었습니다.");
+                } catch (e) {
+                    alert("삭제 실패: " + e.message);
                 }
+            };
+
+            const handleFormSubmit = async () => {
+                if (!db) return alert("데모 모드입니다.");
+                if (!formData.title || !formData.link) return alert("제목과 링크는 필수입니다.");
+
+                try {
+                    if (editTarget) {
+                        await db.collection("portfolio").doc(editTarget.docId).update(formData);
+                        alert("수정되었습니다.");
+                    } else {
+                        await db.collection("portfolio").add({
+                            ...formData,
+                            id: Date.now()
+                        });
+                        alert("추가되었습니다.");
+                    }
+                    setFormData({ title: "", desc: "", icon: "", color: "bg-gray-100 text-gray-600", link: "" });
+                    setEditTarget(null);
+                    setAdminTab("list");
+                } catch (e) {
+                    alert("저장 실패: " + e.message);
+                }
+            };
+
+            const startEdit = (project) => {
+                setEditTarget(project);
+                setFormData({
+                    title: project.title,
+                    desc: project.desc,
+                    icon: project.icon,
+                    color: project.color,
+                    link: project.link
+                });
+                setAdminTab("form");
+            };
+
+            const startCreate = () => {
+                setEditTarget(null);
+                setFormData({ title: "", desc: "", icon: "✨", color: "bg-blue-100 text-blue-600", link: "" });
+                setAdminTab("form");
+            };
+
+            const handleCsvUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file || !db) return;
 
                 const reader = new FileReader();
                 reader.onload = async (event) => {
                     let text = event.target.result;
-                    
-                    // 1. BOM 제거 (엑셀 저장 시 생기는 특수문자 제거)
                     text = text.replace(/^\uFEFF/, ''); 
-
-                    const rows = text.split('\n').slice(1); // 헤더 제외
+                    const rows = text.split('\n').slice(1);
                     
-                    setUploadStatus("데이터 분석 중...");
+                    setUploadStatus("업로드 중...");
                     const batch = db.batch();
                     let count = 0;
 
                     rows.forEach((row, index) => {
-                        // 2. 따옴표 제거 및 공백 정리
-                        // 쉼표로 나누되, 데이터 안의 쉼표는 처리하지 못하므로 간단하게 split 사용
-                        // (복잡한 CSV는 엑셀에서 쉼표를 다른 문자로 바꿔서 저장하는 게 안전함)
                         const cols = row.split(',').map(item => item ? item.trim().replace(/^"|"$/g, '') : '');
-                        
                         if (cols.length >= 5 && cols[0]) {
                             const newDocRef = db.collection("portfolio").doc();
-                            
-                            // 3. 색상 클래스가 비어있으면 기본값 지정
-                            const colorClass = cols[3] || "bg-gray-100 text-gray-600";
-                            
                             batch.set(newDocRef, {
                                 id: Date.now() + index,
-                                title: cols[0],
-                                desc: cols[1],
-                                icon: cols[2], // 이모지
-                                color: colorClass,
-                                link: cols[4]
+                                title: cols[0], desc: cols[1], icon: cols[2], color: cols[3] || "bg-gray-100 text-gray-600", link: cols[4]
                             });
                             count++;
                         }
                     });
 
-                    if (count === 0) {
-                        setUploadStatus("추가할 데이터가 없거나 형식이 잘못되었습니다.");
-                        return;
-                    }
-
-                    try {
+                    if (count > 0) {
                         await batch.commit();
-                        setUploadStatus(`${count}개 업로드 성공! 🎉`);
-                        setTimeout(() => setUploadStatus(""), 3000);
+                        setUploadStatus(`${count}개 업로드 완료!`);
                         if(fileInputRef.current) fileInputRef.current.value = "";
-                    } catch (error) {
-                        console.error(error);
-                        setUploadStatus("업로드 중 오류 발생 😭");
+                        setTimeout(() => setUploadStatus(""), 2000);
+                        setAdminTab("list");
+                    } else {
+                        setUploadStatus("데이터가 없습니다.");
                     }
                 };
                 reader.readAsText(file);
             };
 
-            const deleteProject = async (docId) => {
-                if (!db) return alert("데모 모드입니다.");
-                if (confirm("정말 삭제하시겠습니까?")) {
-                    await db.collection("portfolio").doc(docId).delete();
-                }
-            };
-
             return (
                 <div className="min-h-screen pb-20">
-                    {/* Header */}
+                    {/* --- Public View --- */}
                     <div className="bg-indigo-600 text-white pt-20 pb-24 px-4 text-center relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-full opacity-10">
                             <i className="ph-fill ph-code text-9xl absolute -top-10 -left-10"></i>
@@ -186,10 +222,8 @@
                         </p>
                     </div>
 
-                    {/* Content */}
                     <div className="max-w-6xl mx-auto px-4 -mt-16 relative z-20">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            
                             {/* Profile Card */}
                             <div className="bg-white rounded-2xl shadow-xl p-6 flex flex-col items-center text-center border-t-4 border-indigo-500">
                                 <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg -mt-16 mb-4 bg-gray-200 shrink-0">
@@ -211,29 +245,18 @@
                             {/* Project Cards */}
                             {projects.map((project) => (
                                 <div key={project.id} className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between card-hover transition-all duration-300 relative group h-full">
-                                    {/* Delete Button */}
-                                    {isAdmin && db && project.docId && (
-                                        <button 
-                                            onClick={(e) => { e.preventDefault(); deleteProject(project.docId); }}
-                                            className="absolute top-2 right-2 bg-red-100 text-red-500 w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-500 hover:text-white transition z-30"
-                                            title="삭제"
-                                        >
-                                            <i className="ph-bold ph-trash"></i>
-                                        </button>
-                                    )}
-
                                     <div className="flex flex-col flex-1">
                                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl mb-4 shrink-0 ${project.color || 'bg-gray-100'}`}>
                                             {project.icon || '📁'}
                                         </div>
-                                        <h3 className="text-xl font-bold text-gray-800 mb-2 font-jua break-keep">
+                                        {/* 폰트 크기 축소: text-xl -> text-base */}
+                                        <h3 className="text-base font-bold text-gray-800 mb-2 font-jua break-keep">
                                             {project.title}
                                         </h3>
                                         <p className="text-gray-600 text-sm mb-6 leading-relaxed break-keep flex-1">
                                             {project.desc}
                                         </p>
                                     </div>
-                                    
                                     <div className="flex gap-2 mt-auto shrink-0">
                                         <a href={project.link} target="_blank" className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition flex items-center justify-center gap-2">
                                             <i className="ph-bold ph-play-circle text-lg"></i> 실행하기
@@ -248,7 +271,6 @@
                                     </div>
                                 </div>
                             ))}
-
                         </div>
                     </div>
 
@@ -256,63 +278,192 @@
                         &copy; 2024 Kim Hyung Tae Portfolio. All rights reserved.
                     </footer>
 
-                    {/* Admin Button */}
                     <button 
                         onClick={() => setIsAdminOpen(true)}
-                        className="admin-btn bg-gray-200 text-gray-500 hover:bg-gray-800 hover:text-white p-3 rounded-full shadow-lg transition-all opacity-50 hover:opacity-100"
+                        className="admin-btn bg-white text-gray-400 hover:text-indigo-600 p-3 rounded-full shadow-lg border border-gray-200 hover:border-indigo-500 transition-all opacity-70 hover:opacity-100"
                     >
-                        <i className="ph-fill ph-gear text-xl"></i>
+                        <i className="ph-fill ph-gear text-2xl"></i>
                     </button>
 
-                    {/* Admin Modal */}
                     {isAdminOpen && (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal-overlay backdrop-blur-sm">
-                            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl relative">
-                                <button onClick={() => setIsAdminOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                                    <i className="ph-bold ph-x text-xl"></i>
-                                </button>
-
-                                <h2 className="text-2xl font-bold font-jua mb-6 text-center text-gray-800">
-                                    <i className="ph-fill ph-lock-key text-yellow-500 mr-2"></i>
-                                    관리자 모드
-                                </h2>
+                        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+                            <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col modal-content relative">
+                                
+                                <div className="bg-gray-900 text-white p-4 flex justify-between items-center shrink-0">
+                                    <h2 className="text-xl font-bold font-jua flex items-center">
+                                        <i className="ph-fill ph-lock-key text-yellow-400 mr-2"></i>
+                                        관리자 대시보드
+                                    </h2>
+                                    <button onClick={() => setIsAdminOpen(false)} className="text-gray-400 hover:text-white transition">
+                                        <i className="ph-bold ph-x text-2xl"></i>
+                                    </button>
+                                </div>
 
                                 {!isAdmin ? (
-                                    <div className="space-y-4">
-                                        <p className="text-center text-gray-600 text-sm">관리자 비밀번호를 입력하세요.</p>
-                                        <input 
-                                            type="password" 
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && checkPassword()}
-                                            className="w-full p-3 border border-gray-300 rounded-lg text-center font-bold tracking-widest focus:border-indigo-500 focus:outline-none"
-                                            placeholder="****"
-                                        />
-                                        <button onClick={checkPassword} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition">
-                                            확인
-                                        </button>
+                                    <div className="flex-1 flex flex-col items-center justify-center p-8">
+                                        <div className="w-full max-w-xs space-y-4">
+                                            <p className="text-center text-gray-600 font-bold">비밀번호를 입력하세요.</p>
+                                            <input 
+                                                type="password" 
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && checkPassword()}
+                                                className="w-full p-3 border-2 border-gray-200 rounded-lg text-center text-xl font-bold tracking-widest focus:border-indigo-500 focus:outline-none"
+                                                placeholder="****"
+                                                autoFocus
+                                            />
+                                            <button onClick={checkPassword} className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 transition">
+                                                접속하기
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : (
-                                    <div className="space-y-6">
-                                        <div className="bg-green-50 p-4 rounded-xl border border-green-200 text-center">
-                                            <p className="text-green-700 font-bold mb-2">CSV 일괄 업로드</p>
-                                            <p className="text-xs text-gray-500 mb-4">
-                                                파일 형식: 제목,설명,아이콘,색상,링크<br/>
-                                                (쉼표로 구분, 따옴표 자동 제거됨)
-                                            </p>
-                                            <input 
-                                                type="file" 
-                                                accept=".csv"
-                                                ref={fileInputRef}
-                                                onChange={handleFileUpload}
-                                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-100 file:text-green-700 hover:file:bg-green-200 cursor-pointer"
-                                            />
-                                            {uploadStatus && <p className="mt-2 text-sm font-bold text-indigo-600">{uploadStatus}</p>}
+                                    <div className="flex flex-1 overflow-hidden">
+                                        <div className="w-48 bg-gray-50 border-r border-gray-200 p-4 flex flex-col gap-2 shrink-0">
+                                            <button onClick={() => setAdminTab("list")} className={`p-3 rounded-lg text-left font-bold text-sm flex items-center ${adminTab==='list' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                                <i className="ph-bold ph-list-dashes mr-2"></i> 목록 관리
+                                            </button>
+                                            <button onClick={startCreate} className={`p-3 rounded-lg text-left font-bold text-sm flex items-center ${adminTab==='form' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                                <i className="ph-bold ph-plus-circle mr-2"></i> 개별 추가
+                                            </button>
+                                            <button onClick={() => setAdminTab("csv")} className={`p-3 rounded-lg text-left font-bold text-sm flex items-center ${adminTab==='csv' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                                <i className="ph-bold ph-file-csv mr-2"></i> 일괄 업로드
+                                            </button>
+                                            <div className="mt-auto">
+                                                <button onClick={() => { setIsAdmin(false); setIsAdminOpen(false); }} className="w-full p-2 rounded border border-gray-300 text-gray-500 text-xs hover:bg-red-50 hover:text-red-500 hover:border-red-200 font-bold">
+                                                    로그아웃
+                                                </button>
+                                            </div>
                                         </div>
-                                        
-                                        <button onClick={() => { setIsAdmin(false); setIsAdminOpen(false); }} className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-bold hover:bg-gray-300">
-                                            관리자 로그아웃
-                                        </button>
+
+                                        <div className="flex-1 p-6 overflow-y-auto bg-white">
+                                            
+                                            {adminTab === 'list' && (
+                                                <div className="h-full flex flex-col">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="font-bold text-lg">프로젝트 목록 ({projects.length})</h3>
+                                                    </div>
+
+                                                    <div className="border rounded-lg overflow-hidden flex-1">
+                                                        <table className="w-full text-sm text-left">
+                                                            <thead className="bg-gray-100 text-gray-600 uppercase font-bold text-xs">
+                                                                <tr>
+                                                                    {/* 번호/체크박스 삭제 */}
+                                                                    <th className="p-3">제목 / 설명</th>
+                                                                    <th className="p-3 w-24 text-center">관리</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-100">
+                                                                {projects.map(p => (
+                                                                    <tr key={p.id} className="hover:bg-gray-50 group">
+                                                                        <td className="p-3">
+                                                                            <div className="flex items-start gap-3">
+                                                                                {/* 아이콘 열 삭제 대신 제목 옆에 작게 표시 */}
+                                                                                <span className="text-xl">{p.icon}</span>
+                                                                                <div className="flex-1 min-w-[300px]"> {/* 넓은 가로폭 확보 */}
+                                                                                    <div className="font-bold text-gray-800 text-base">{p.title}</div>
+                                                                                    <div className="text-xs text-gray-500 truncate">{p.desc}</div>
+                                                                                    <a href={p.link} target="_blank" className="text-xs text-indigo-400 hover:underline">{p.link}</a>
+                                                                                </div>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="p-3 text-center space-x-2 align-top pt-4">
+                                                                            {p.docId ? (
+                                                                                <>
+                                                                                    <button onClick={() => startEdit(p)} className="text-gray-400 hover:text-indigo-600"><i className="ph-bold ph-pencil-simple"></i></button>
+                                                                                    <button onClick={() => handleDelete(p.docId)} className="text-gray-400 hover:text-red-600"><i className="ph-bold ph-trash"></i></button>
+                                                                                </>
+                                                                            ) : (
+                                                                                <span className="text-xs text-gray-300 bg-gray-100 px-1 rounded">Demo</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                                {projects.length === 0 && (
+                                                                    <tr><td colSpan="2" className="p-8 text-center text-gray-400">데이터가 없습니다.</td></tr>
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {adminTab === 'form' && (
+                                                <div className="max-w-lg mx-auto">
+                                                    <h3 className="font-bold text-lg mb-6 border-b pb-2">
+                                                        {editTarget ? "프로젝트 수정" : "새 프로젝트 추가"}
+                                                    </h3>
+                                                    <div className="space-y-4">
+                                                        <div>
+                                                            <label className="block text-xs font-bold text-gray-500 mb-1">제목</label>
+                                                            <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="예: 급식표 앱" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold text-gray-500 mb-1">설명</label>
+                                                            <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} placeholder="앱에 대한 간단한 설명" />
+                                                        </div>
+                                                        <div className="flex gap-4">
+                                                            <div className="flex-1">
+                                                                <label className="block text-xs font-bold text-gray-500 mb-1">아이콘 (이모지)</label>
+                                                                <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none text-center" 
+                                                                    value={formData.icon} onChange={e => setFormData({...formData, icon: e.target.value})} placeholder="🍱" />
+                                                            </div>
+                                                            <div className="flex-[2]">
+                                                                <label className="block text-xs font-bold text-gray-500 mb-1">색상 테마 (Tailwind)</label>
+                                                                <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                    value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} placeholder="bg-blue-100 text-blue-600" />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-bold text-gray-500 mb-1">링크 (URL)</label>
+                                                            <input type="text" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                value={formData.link} onChange={e => setFormData({...formData, link: e.target.value})} placeholder="./Lv4_S02_Lunch.html" />
+                                                        </div>
+                                                        
+                                                        <div className="pt-4 flex gap-2">
+                                                            <button onClick={() => setAdminTab("list")} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-300">취소</button>
+                                                            <button onClick={handleFormSubmit} className="flex-[2] bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-lg">
+                                                                {editTarget ? "수정 완료" : "추가하기"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {adminTab === 'csv' && (
+                                                <div className="max-w-lg mx-auto text-center pt-8">
+                                                    <div className="bg-green-50 border-2 border-dashed border-green-300 rounded-xl p-8 mb-6">
+                                                        <i className="ph-duotone ph-file-csv text-6xl text-green-500 mb-4"></i>
+                                                        <h3 className="text-xl font-bold text-green-800 mb-2">CSV 파일 일괄 업로드</h3>
+                                                        <p className="text-sm text-gray-600 mb-6">
+                                                            엑셀 내용을 한 번에 DB에 저장합니다.<br/>
+                                                            <span className="text-xs text-gray-400">(형식: 제목, 설명, 아이콘, 색상, 링크)</span>
+                                                        </p>
+                                                        <input 
+                                                            type="file" 
+                                                            accept=".csv"
+                                                            ref={fileInputRef}
+                                                            onChange={handleCsvUpload}
+                                                            className="block w-full text-sm text-gray-500
+                                                                file:mr-4 file:py-2 file:px-4
+                                                                file:rounded-full file:border-0
+                                                                file:text-sm file:font-semibold
+                                                                file:bg-green-100 file:text-green-700
+                                                                hover:file:bg-green-200 cursor-pointer mx-auto max-w-xs
+                                                            "
+                                                        />
+                                                    </div>
+                                                    {uploadStatus && (
+                                                        <div className="bg-indigo-50 text-indigo-700 p-3 rounded-lg font-bold animate-pulse">
+                                                            {uploadStatus}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                        </div>
                                     </div>
                                 )}
                             </div>
