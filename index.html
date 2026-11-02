@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>김형태님의 AI 코딩 포트폴리오</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.12.0/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
+        .font-jua { font-family: 'Jua', sans-serif; }
+        .card-hover:hover { transform: translateY(-3px); box-shadow: 0 5px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .admin-btn { position: fixed; bottom: 84px; left: 12px; z-index: 45; }
+        @media (min-width: 1024px) { .admin-btn { bottom: 20px; right: 20px; left: auto; } }
+        /* Modal Animation */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .modal-content { animation: fadeIn 0.2s ease-out; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c7c7c7; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react">
+        const { useState, useEffect, useRef } = React;
+
+        // ==========================================
+        // [설정 구역] Firebase 설정
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBiMp5UEmNviSazPRxb-5L60jJnELZL6S0",
+            authDomain: "ai-coding-collection.firebaseapp.com",
+            projectId: "ai-coding-collection",
+            storageBucket: "ai-coding-collection.firebasestorage.app",
+            messagingSenderId: "572754851302",
+            appId: "1:572754851302:web:22050169bb98eebaa3d227"
+        };
+
+        // Firebase 초기화
+        let db = null;
+        if (firebaseConfig.apiKey) {
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            db = firebase.firestore();
+        }
+
+        // 기본 데모 데이터
+        const DEMO_PROJECTS = [
+            { id: 1, title: "모의투자 동아리 앱", desc: "React와 State를 활용해 만든 주식 매매 시뮬레이션", icon: "📈", color: "bg-purple-100 text-purple-600", link: "./Lv4_S01_Stock.html" },
+            { id: 2, title: "우리 반 급식표", desc: "요일별 급식 메뉴를 확인하고 좋아요를 누르는 앱", icon: "🍱", color: "bg-orange-100 text-orange-600", link: "./Lv4_S02_Lunch.html" },
+            { id: 3, title: "영원한 방명록", desc: "새로고침해도 사라지지 않는 로컬 스토리지 DB 실습", icon: "📝", color: "bg-yellow-100 text-yellow-600", link: "./Lv5_S01_Guestbook.html" },
+            { id: 4, title: "AI 봇 채팅방", desc: "실시간으로 대화하는 듯한 채팅 UI 구현", icon: "💬", color: "bg-blue-100 text-blue-600", link: "./Lv5_S02_Chat.html" },
+            { id: 5, title: "수료증 발급기", desc: "과정을 마치고 이름을 입력하면 상장이 나오는 앱", icon: "🎓", color: "bg-green-100 text-green-600", link: "./Lv6_S02_Graduation.html" }
+        ];
+
+        // ==========================================
+        // [분류 체계] 대분류 7개 + 세부분류
+        // 새 항목은 관리자 화면에서 분류를 선택하면 Firestore에 category/sub 필드로 저장됩니다.
+        // ==========================================
+        const CATS = [
+            { id: 'learn', name: '수업·학습',     icon: '📚', bg: 'bg-blue-50',    desc: '강의플랫폼·시험·실습', subs: ['강의 플랫폼','시험·평가','바이브코딩','실습·특강','어학','수업 도구','수업용 게임'] },
+            { id: 'ops',   name: '학과·대학 운영', icon: '🏛', bg: 'bg-violet-50',  desc: '행정·게시판·행사',     subs: ['행정·업무','게시판·소통','행사·동아리'] },
+            { id: 'ai',    name: 'AI 서비스',      icon: '🤖', bg: 'bg-cyan-50',    desc: '통역·투자·AI도구',     subs: ['통역·회화','투자·브리핑','AI 도구'] },
+            { id: 'stu',   name: '학생 작품',      icon: '🎓', bg: 'bg-emerald-50', desc: '게임·생활·관리 앱',    subs: ['게임','생활·건강 앱','관리·학습 앱'] },
+            { id: 'wis',   name: '지혜·인문',      icon: '💡', bg: 'bg-amber-50',   desc: '동기부여 영상·인문',   subs: ['동기부여 영상','관계·가정','인문·역사','웹툰'] },
+            { id: 'biz',   name: '창업·산업 사례', icon: '🚀', bg: 'bg-rose-50',    desc: '창업 이야기·현장',     subs: ['창업 이야기','산업 사례'] },
+            { id: 'life',  name: '개인·생활',      icon: '🙏', bg: 'bg-pink-50',    desc: '묵상·여행·운동',       subs: ['묵상·QT','여행','운동·취미'] },
+            { id: 'etc',   name: '미분류',         icon: '🗂', bg: 'bg-gray-100',   desc: '분류 지정 전',         subs: ['미분류'] },
+        ];
+        const CAT = Object.fromEntries(CATS.map(c => [c.id, c]));
+        // 기존 140개 항목의 분류표 (제목 기준)
+        const TITLE_MAP = {"WOS-Collection": ["ops", "행정·업무"], "우송대학교 WOS-AI캠퍼스 플랫폼": ["ops", "행정·업무"], "일본어 기본표현 75문장": ["learn", "어학"], "경영학과 창업": ["biz", "창업 이야기"], "일본어공부-기본표현75개 (Nihongo- 75 expressions)": ["learn", "어학"], "비즈니스모델과경영의사결정론 - 중간고사 연습사이트": ["learn", "시험·평가"], "WOS아이디어뱅크": ["ops", "행정·업무"], "AI경영학과 교수진 활동 DB": ["ops", "행정·업무"], "우송대 비상연락망": ["ops", "행정·업무"], "Bias(생존자편향)": ["wis", "동기부여 영상"], "비즈니스모델과의사결정론 -강의플랫폼": ["learn", "강의 플랫폼"], "AI경영학과 로봇도우미": ["ops", "게시판·소통"], "목표를 크게 잡아야 하는 이유": ["wis", "동기부여 영상"], "건강체조": ["life", "운동·취미"], "Learn from boiling water": ["wis", "동기부여 영상"], "실시간 강의환경 (김동혁교수님)": ["learn", "강의 플랫폼"], "현실에 안주하지 마라": ["wis", "동기부여 영상"], "더 높은곳으로 올라가세요!": ["wis", "동기부여 영상"], "2026 여름 동경여행": ["life", "여행"], "부모와 자식의 관계": ["wis", "관계·가정"], "주변에 좋은친구들이 필요한 진짜이유": ["wis", "관계·가정"], "ADsP 실전대비 모의고사": ["learn", "시험·평가"], "결혼생활(•ㅡㅡㅡ°)": ["wis", "관계·가정"], "조선왕조 인물 100선": ["wis", "인문·역사"], "AI 돼지축사 호은농장": ["biz", "산업 사례"], "한국의 해저터널 기술": ["wis", "인문·역사"], "창업가정신": ["biz", "창업 이야기"], "견생상점": ["biz", "산업 사례"], "골프레슨 짤강": ["life", "운동·취미"], "자격증 학습 포털 ADSP": ["learn", "시험·평가"], "실시간 동시통역기": ["ai", "통역·회화"], "원어민친구": ["ai", "통역·회화"], "지버서버": ["ai", "AI 도구"], "외국인 친구": ["ai", "통역·회화"], "자기부상열차 토론자료": ["learn", "실습·특강"], "동시통역기": ["ai", "통역·회화"], "베이지안 통계": ["learn", "강의 플랫폼"], "AI시대를 살아가는 법 - 특강": ["learn", "실습·특강"], "AI경영 오돌뼈 식당": ["ops", "행사·동아리"], "경통중간고사 2026-01": ["learn", "시험·평가"], "탈무드의 교훈": ["wis", "인문·역사"], "인문도서 100선 (오디오링크)": ["wis", "인문·역사"], "동기부여/ 땀과연습": ["wis", "동기부여 영상"], "커피 먹는 강아지 (웹툰)": ["wis", "웹툰"], "엔디컷 주간업무보고 시스템": ["ops", "행정·업무"], "단기투자추천종목": ["ai", "투자·브리핑"], "AI-MBA Knowledge Curator": ["ai", "AI 도구"], "학과 다국어 지원 게시판 (한국어 중국어 영어)": ["ops", "게시판·소통"], "2026 AI경영학과 경영통계수 강의 플랫폼": ["learn", "강의 플랫폼"], "바이브코딩 - AIM2기 최고경영자과정 실습": ["learn", "바이브코딩"], "hana-daily-brief": ["ai", "투자·브리핑"], "aim-board": ["ops", "게시판·소통"], "New 데일리묵상캘린더": ["life", "묵상·QT"], "AI 마피아": ["stu", "게임"], "감정(마음) 기록 선택 프로그램 (ChenXiangGui 02)": ["stu", "생활·건강 앱"], "출석관리 시스템 (ChenXiangGui 01)": ["stu", "관리·학습 앱"], "랜덤 주간 계획 생성기 (KuangHuiJun)": ["stu", "관리·학습 앱"], "체중기록 프로그램 (Lyu MengYe)": ["stu", "생활·건강 앱"], "일일 수분섭취 모니터링 프로그램 (OuYangLing)": ["stu", "생활·건강 앱"], "🌟 별빛 스타일 휠 | 星光风格罗盘 (Sun Ruyi)": ["stu", "생활·건강 앱"], "감정분석 프로그램 (MaYuYuan 02)": ["stu", "생활·건강 앱"], "충동소비 방지 프로그램 (MaYuYuan 01)": ["stu", "생활·건강 앱"], "한국 쓰레기 분리수거 가이드 (MengYangYang)": ["stu", "생활·건강 앱"], "학생 성적 입력 웹앱 (LiuSiKai)": ["stu", "관리·학습 앱"], "금연도우미 프로그램 (Hu Yichen)": ["stu", "생활·건강 앱"], "현장평가 일정조율 프로그램 (금정섭)": ["ops", "행정·업무"], "모의주식투자_v2": ["ops", "행사·동아리"], "AI경영 러닝 동아리": ["ops", "행사·동아리"], "Liu Yaqi": ["stu", "게임"], "Li Lin Feng": ["stu", "게임"], "Kang Hyun Hui": ["stu", "게임"], "Kim Da Eun": ["stu", "게임"], "Kim Min Jung": ["stu", "게임"], "Kim Jae Won": ["stu", "게임"], "Kim Hyun Woo": ["stu", "게임"], "Park Seo Hyun": ["stu", "게임"], "Song Yun Seo": ["stu", "게임"], "Yeum Ji Hyun": ["stu", "게임"], "Lee Sang Hyun": ["stu", "게임"], "Lee Seung Hyun": ["stu", "게임"], "Lee Eun Ki": ["stu", "게임"], "Lee Jae Hyuk": ["stu", "게임"], "Lee Jung Min": ["stu", "게임"], "Lee Tae Gun": ["stu", "게임"], "Lee Ha Neul": ["stu", "게임"], "Lee Hyun Jung": ["stu", "게임"], "Jang Hyun Ah": ["stu", "게임"], "Jeong Seung Hyun": ["stu", "게임"], "Hong Seung Ah": ["stu", "관리·학습 앱"], "Choi Hee Seung": ["stu", "생활·건강 앱"], "스마트플래너": ["stu", "관리·학습 앱"], "반배정시스템": ["stu", "관리·학습 앱"], "여행계획수립": ["stu", "생활·건강 앱"], "EduFlow": ["stu", "관리·학습 앱"], "To-Do List 시작하기": ["stu", "관리·학습 앱"], "랜덤 반배정기": ["stu", "관리·학습 앱"], "[2hr] 바이브코딩 실습강의": ["learn", "바이브코딩"], "[앱서비스] 365 Daily QT(Quiet Time) for 우기연 (버전1)": ["life", "묵상·QT"], "[앱서비스] 365 Daily QT(Quiet Time) for 우기연 (버전2)": ["life", "묵상·QT"], "[강의플랫폼] AI경영 경영통계 학습 플랫폼": ["learn", "강의 플랫폼"], "[실습강의] 데이터전처리": ["learn", "실습·특강"], "[파워유튜버] 코딩알려주는누나": ["learn", "바이브코딩"], "실시간 디지털 공유 칠판": ["learn", "수업 도구"], "프로젝트협업소통툴": ["ops", "게시판·소통"], "k-talk live": ["ai", "통역·회화"], "우송대 전체학과 강의배정 시스템 (for 학과장)": ["ops", "행정·업무"], "엔디컷단대 2026 학사 캘린더": ["ops", "행정·업무"], "우송대 AI경영학과 강의배정시스템": ["ops", "행정·업무"], "온라인쇼핑몰": ["biz", "창업 이야기"], "엔디컷국제대학 학생만족도 설문조사": ["ops", "행정·업무"], "엔디컷국제대학 학생만족도 설문조사 (어드민페이지)": ["ops", "행정·업무"], "학생성적배포 링크": ["learn", "시험·평가"], "게임과제물 / 결과점검": ["learn", "시험·평가"], "9) 실시간 온라인 시험 템플릿 (결과리포트페이지)": ["learn", "시험·평가"], "10) 실시간 온라인 시험 템플릿 (개별리포트생성페이지)": ["learn", "시험·평가"], "RPG -  다크 던전 게임": ["stu", "게임"], "AI바이브코딩강좌": ["learn", "바이브코딩"], "11) 마라톤동호회 회원DB 앱": ["life", "운동·취미"], "여성주기관리플랫폼": ["stu", "생활·건강 앱"], "모의주식투자게임": ["stu", "게임"], "달기기경주": ["stu", "게임"], "비만관리 앱": ["stu", "생활·건강 앱"], "생활 쓰레기 분류 도우미": ["stu", "생활·건강 앱"], "여행계획수립도우미": ["stu", "생활·건강 앱"], "개인건강관리": ["stu", "생활·건강 앱"], "개인일정관리시스템": ["stu", "관리·학습 앱"], "학생정보관리시스템": ["stu", "관리·학습 앱"], "중한단어학습": ["stu", "관리·학습 앱"], "운동건강플랫폼": ["stu", "생활·건강 앱"], "가계부(금전출납부)": ["stu", "생활·건강 앱"], "건강식단도우미": ["stu", "생활·건강 앱"], "8)  실시간 온라인 시험 템플릿 (Statistics Class)": ["learn", "시험·평가"], "7) 마라톤동호회 운동인증용 출석부": ["life", "운동·취미"], "6) 토익단어게임": ["learn", "수업용 게임"], "5) 추억의 오락게임(덩키콩)": ["learn", "수업용 게임"], "4) 갤러그 게임 (완성버전)": ["learn", "수업용 게임"], "3) 너구리게임 (추억의 게임)": ["learn", "수업용 게임"], "2) 웹기반 퀴즈 (영화제목맞추기)": ["learn", "수업용 게임"], "1) 파이썬 학습 (실시간 리더보드)": ["learn", "바이브코딩"]};
+        const DEFAULT_PINS = ["WOS-Collection", "우송대학교 WOS-AI캠퍼스 플랫폼", "비즈니스모델과경영의사결정론 - 중간고사 연습사이트", "AI경영학과 교수진 활동 DB", "우송대 비상연락망", "비즈니스모델과의사결정론 -강의플랫폼", "AI경영학과 로봇도우미", "엔디컷 주간업무보고 시스템", "New 데일리묵상캘린더", "엔디컷단대 2026 학사 캘린더"];
+
+        const classify = (p) => {
+            if (p.category && CAT[p.category]) return [p.category, p.sub || CAT[p.category].subs[0]];
+            return TITLE_MAP[(p.title || '').trim()] || ['etc', '미분류'];
+        };
+        const typeOf = (link = '') => {
+            if (/instagram\.com|facebook\.com|youtube\.com|youtu\.be|x\.com|twitter\.com|canva\.link|tiktok\.com/.test(link)) return 'video';
+            if (/docs\.google\.com|drive\.google\.com/.test(link)) return 'doc';
+            return 'app';
+        };
+        const TYPES = { all: '전체 유형', app: '🌐 웹앱', video: '🎬 영상', doc: '📄 문서' };
+
+        // 초성 검색
+        const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+        const toCho = (s) => [...s].map(ch => { const k = ch.charCodeAt(0) - 44032; return (k >= 0 && k < 11172) ? CHO[Math.floor(k / 588)] : ch; }).join('');
+        const isCho = (q) => /^[ㄱ-ㅎ\s]+$/.test(q);
+
+        const loadLS = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } };
+        const saveLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+        const App = () => {
+            const [projects, setProjects] = useState(DEMO_PROJECTS);
+            const [copiedId, setCopiedId] = useState(null);
+
+            // 탐색 상태
+            const [q, setQ] = useState("");
+            const [cat, setCat] = useState("all");      // all | fav | recent | 분류id
+            const [sub, setSub] = useState("all");
+            const [type, setType] = useState("all");
+            const [view, setView] = useState(loadLS('pf_view', 'grid'));
+            const [favs, setFavs] = useState(loadLS('pf_favs', DEFAULT_PINS));
+            const [recent, setRecent] = useState(loadLS('pf_recent', []));
+            const [sheetOpen, setSheetOpen] = useState(false);
+            const searchRef = useRef(null);
+            
+            // Admin State
+            const [isAdminOpen, setIsAdminOpen] = useState(false);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [password, setPassword] = useState("");
+            const [adminTab, setAdminTab] = useState("list"); 
+            
+            // Edit/Create State
+            const [editTarget, setEditTarget] = useState(null);
+            const [formData, setFormData] = useState({ title: "", desc: "", icon: "", color: "bg-gray-100 text-gray-600", link: "", category: "", sub: "" });
+            
+            const [uploadStatus, setUploadStatus] = useState("");
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                if (db) {
+                    const unsubscribe = db.collection("portfolio").orderBy("id", "desc").onSnapshot((snapshot) => {
+                        const dbProjects = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+                        if(snapshot.size > 0 || dbProjects.length === 0) {
+                             setProjects(dbProjects);
+                        }
+                    });
+                    return () => unsubscribe();
+                }
+            }, []);
+
+            // "/" 키로 검색창 포커스
+            useEffect(() => {
+                const h = (e) => {
+                    const tag = document.activeElement && document.activeElement.tagName;
+                    if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA') { e.preventDefault(); searchRef.current && searchRef.current.focus(); }
+                };
+                window.addEventListener('keydown', h);
+                return () => window.removeEventListener('keydown', h);
+            }, []);
+
+            useEffect(() => saveLS('pf_favs', favs), [favs]);
+            useEffect(() => saveLS('pf_recent', recent), [recent]);
+            useEffect(() => saveLS('pf_view', view), [view]);
+
+            // 분류·검색용 필드를 붙인 목록
+            const items = React.useMemo(() => projects.map(p => {
+                const [c, s] = classify(p);
+                const key = (p.title || '').trim() + '|' + (p.link || '');
+                return { ...p, _c: c, _s: s, _t: typeOf(p.link), _key: key,
+                    _hay: ((p.title || '') + ' ' + (p.desc || '') + ' ' + s + ' ' + CAT[c].name).toLowerCase(),
+                    _cho: toCho((p.title || '') + ' ' + (p.desc || '')).replace(/\s/g, '') };
+            }), [projects]);
+
+            const isFav = (it) => favs.includes(it._key) || favs.includes((it.title || '').trim());
+            const toggleFav = (it) => {
+                const t = (it.title || '').trim();
+                setFavs(isFav(it) ? favs.filter(f => f !== it._key && f !== t) : [...favs, it._key]);
+            };
+            const matchQ = (it) => {
+                const s = q.trim().toLowerCase();
+                if (!s) return true;
+                if (isCho(s)) return it._cho.includes(s.replace(/\s/g, ''));
+                return s.split(/\s+/).every(w => it._hay.includes(w));
+            };
+            const openItem = (it) => {
+                setRecent([it._key, ...recent.filter(r => r !== it._key)].slice(0, 15));
+                window.open(it.link, '_blank', 'noopener');
+            };
+            const copyToClipboard = (link, id) => {
+                const fullUrl = new URL(link, window.location.href).href;
+                navigator.clipboard.writeText(fullUrl).then(() => {
+                    setCopiedId(id);
+                    setTimeout(() => setCopiedId(null), 2000);
+                });
+            };
+
+            const checkPassword = () => {
+                if (password === "1230") {
+                    setIsAdmin(true);
+                    setPassword("");
+                } else {
+                    alert("비밀번호가 틀렸습니다!");
+                }
+            };
+
+            const handleDelete = async (docId) => {
+                if (!db) return alert("데모 모드에서는 삭제할 수 없습니다.");
+                if (!confirm(`정말 삭제하시겠습니까?`)) return;
+                try {
+                    await db.collection("portfolio").doc(docId).delete();
+                    alert("삭제되었습니다.");
+                } catch (e) {
+                    alert("삭제 실패: " + e.message);
+                }
+            };
+
+            const handleFormSubmit = async () => {
+                if (!db) return alert("데모 모드입니다.");
+                if (!formData.title || !formData.link) return alert("제목과 링크는 필수입니다.");
+
+                try {
+                    if (editTarget) {
+                        await db.collection("portfolio").doc(editTarget.docId).update(formData);
+                        alert("수정되었습니다.");
+                    } else {
+                        await db.collection("portfolio").add({
+                            ...formData,
+                            id: Date.now()
+                        });
+                        alert("추가되었습니다.");
+                    }
+                    setFormData({ title: "", desc: "", icon: "", color: "bg-gray-100 text-gray-600", link: "", category: "", sub: "" });
+                    setEditTarget(null);
+                    setAdminTab("list");
+                } catch (e) {
+                    alert("저장 실패: " + e.message);
+                }
+            };
+
+            const startEdit = (project) => {
+                setEditTarget(project);
+                setFormData({
+                    title: project.title,
+                    desc: project.desc,
+                    icon: project.icon,
+                    color: project.color,
+                    link: project.link,
+                    category: project.category || classify(project)[0],
+                    sub: project.sub || classify(project)[1]
+                });
+                setAdminTab("form");
+            };
+
+            const startCreate = () => {
+                setEditTarget(null);
+                setFormData({ title: "", desc: "", icon: "✨", color: "bg-blue-100 text-blue-600", link: "", category: "", sub: "" });
+                setAdminTab("form");
+            };
+
+            const parseCSV = (text) => {
+                const arr = []; 
+                let quote = false; 
+                let row = 0, col = 0, c = 0;
+                if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+                for (; c < text.length; c++) {
+                    let cc = text[c], nc = text[c+1];
+                    arr[row] = arr[row] || []; 
+                    arr[row][col] = arr[row][col] || ''; 
+                    if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; }
+                    else if (cc == '"') { quote = !quote; }
+                    else if (cc == ',' && !quote) { ++col; }
+                    else if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; }
+                    else if (cc == '\n' && !quote) { ++row; col = 0; }
+                    else { arr[row][col] += cc; }
+                }
+                return arr;
+            };
+
+            const handleCsvUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file || !db) return;
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const text = event.target.result;
+                    const rows = parseCSV(text);
+                    const dataRows = rows.slice(1);
+                    setUploadStatus("업로드 중...");
+                    const batch = db.batch();
+                    let count = 0;
+                    dataRows.forEach((cols, index) => {
+                        if (cols.length < 2 || !cols[0].trim()) return;
+                        const newDocRef = db.collection("portfolio").doc();
+                        batch.set(newDocRef, {
+                            id: Date.now() + index,
+                            title: cols[0].trim(), desc: cols[1].trim(), icon: cols[2] ? cols[2].trim() : '📁', 
+                            color: cols[3] ? cols[3].trim() : "bg-gray-100 text-gray-600", link: cols[4] ? cols[4].trim() : "#",
+                            category: cols[5] ? cols[5].trim() : "", sub: cols[6] ? cols[6].trim() : ""
+                        });
+                        count++;
+                    });
+                    if (count > 0) {
+                        await batch.commit();
+                        setUploadStatus(`${count}개 업로드 완료!`);
+                        if(fileInputRef.current) fileInputRef.current.value = "";
+                        setTimeout(() => setUploadStatus(""), 2000);
+                        setAdminTab("list");
+                    } else {
+                        setUploadStatus("데이터 오류");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const countOf = (c) => items.filter(i => i._c === c).length;
+            const usedCats = CATS.filter(c => countOf(c.id) > 0);
+            const favItems = items.filter(isFav);
+            const recentItems = recent.map(k => items.find(i => i._key === k)).filter(Boolean);
+
+            let list;
+            if (cat === 'fav') list = favItems.filter(matchQ);
+            else if (cat === 'recent') list = recentItems.filter(matchQ);
+            else list = items.filter(i => (cat === 'all' || i._c === cat) && (sub === 'all' || i._s === sub) && (type === 'all' || i._t === type) && matchQ(i));
+
+            const selectCat = (c) => { setCat(c); setSub('all'); setSheetOpen(false); window.scrollTo({ top: 0 }); };
+            const onSearch = (v) => { setQ(v); if (cat === 'fav' || cat === 'recent') setCat('all'); };
+
+            const hl = (text) => {
+                const s = q.trim();
+                if (!text || !s || isCho(s)) return text;
+                const i = text.toLowerCase().indexOf(s.toLowerCase());
+                if (i < 0) return text;
+                return <>{text.slice(0, i)}<mark className="bg-yellow-200 rounded px-0.5">{text.slice(i, i + s.length)}</mark>{text.slice(i + s.length)}</>;
+            };
+
+            const TypeBadge = ({ t }) => t === 'app' ? null :
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${t === 'video' ? 'bg-rose-50 text-rose-600' : 'bg-green-50 text-green-700'}`}>{t === 'video' ? '영상' : '문서'}</span>;
+
+            const Row = ({ it, compact }) => (
+                <div onClick={() => openItem(it)}
+                    className={`flex items-center gap-3 bg-white cursor-pointer transition ${compact ? 'px-3 py-2.5 border-b border-gray-100 last:border-b-0 active:bg-gray-50' : 'p-2.5 rounded-xl border border-gray-200 hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5'}`}>
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0 ${CAT[it._c].bg}`}>{it.icon && it.icon !== '✨' && it.icon !== '📁' ? it.icon : CAT[it._c].icon}</div>
+                    <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-bold text-gray-800 truncate">{hl(it.title)}</div>
+                        <div className="text-[11px] text-gray-500 truncate">{hl(it.desc && it.desc.trim() !== (it.title || '').trim() ? it.desc : it._s)}</div>
+                    </div>
+                    <TypeBadge t={it._t} />
+                    <button onClick={(e) => { e.stopPropagation(); copyToClipboard(it.link, it._key); }} title="링크 복사"
+                        className={`hidden lg:flex w-7 h-7 rounded-md items-center justify-center text-sm shrink-0 ${copiedId === it._key ? 'text-green-600' : 'text-gray-300 hover:text-gray-600'}`}>
+                        <i className={`ph-bold ${copiedId === it._key ? 'ph-check' : 'ph-link'}`}></i>
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFav(it); }} title="즐겨찾기"
+                        className={`text-lg px-1 shrink-0 ${isFav(it) ? 'text-yellow-400' : 'text-gray-300 hover:text-gray-400'}`}>★</button>
+                </div>
+            );
+
+            const Grid = ({ arr }) => view === 'list'
+                ? <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">{arr.map(it => <Row key={it._key + it.id} it={it} compact />)}</div>
+                : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">{arr.map(it => <Row key={it._key + it.id} it={it} />)}</div>;
+
+            const groupBy = (arr, k) => { const m = new Map(); arr.forEach(x => { if (!m.has(x[k])) m.set(x[k], []); m.get(x[k]).push(x); }); return [...m]; };
+            const Empty = ({ msg }) => <div className="text-center text-gray-400 text-sm py-12">{msg || '검색 결과가 없습니다 🙂'}</div>;
+
+            // ---------- 데스크톱 결과 ----------
+            const DesktopResults = () => {
+                if (!list.length) return <Empty msg={cat === 'fav' ? '⭐를 눌러 즐겨찾기를 추가하세요' : cat === 'recent' ? '아직 연 사이트가 없어요' : null} />;
+                if (cat === 'fav' || cat === 'recent') return <Grid arr={list} />;
+                if (cat === 'all') return groupBy(list, '_c').sort((a, b) => CATS.findIndex(c => c.id === a[0]) - CATS.findIndex(c => c.id === b[0])).map(([c, arr]) => (
+                    <section key={c} className="mt-6">
+                        <h2 className="text-[15px] font-bold mb-2.5 flex items-center gap-2">{CAT[c].icon} {CAT[c].name} <span className="text-xs font-normal text-gray-400">{arr.length}</span></h2>
+                        <Grid arr={arr} />
+                    </section>));
+                return groupBy(list, '_s').map(([s, arr]) => (
+                    <section key={s} className="mt-5">
+                        <div className="text-xs font-bold text-gray-500 mb-2">{s} · {arr.length}</div>
+                        <Grid arr={arr} />
+                    </section>));
+            };
+
+            // ---------- 모바일 결과 ----------
+            const MobileResults = () => {
+                const Box = ({ children }) => <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">{children}</div>;
+                if (cat === 'fav' || cat === 'recent') return list.length
+                    ? <Box>{list.map(it => <Row key={it._key + it.id} it={it} compact />)}</Box>
+                    : <Empty msg={cat === 'fav' ? '⭐를 눌러 즐겨찾기를 추가하세요' : '아직 연 사이트가 없어요'} />;
+                if (q.trim()) return <>
+                    <div className="text-sm font-bold mb-2">검색 결과 {list.length}</div>
+                    {list.length ? <Box>{list.map(it => <Row key={it._key + it.id} it={it} compact />)}</Box> : <Empty />}
+                </>;
+                if (cat !== 'all') return groupBy(list, '_s').map(([s, arr]) => (
+                    <section key={s} className="mb-4">
+                        <h3 className="text-sm font-bold mb-2">{s} <span className="text-xs text-gray-400 font-normal">{arr.length}</span></h3>
+                        <Box>{arr.map(it => <Row key={it._key + it.id} it={it} compact />)}</Box>
+                    </section>));
+                return <>
+                    {favItems.length > 0 && <section className="mb-5">
+                        <h3 className="text-sm font-bold mb-2">⭐ 자주 쓰는</h3>
+                        <div className="grid grid-cols-4 gap-2">
+                            {favItems.slice(0, 8).map(it => (
+                                <div key={it._key + it.id} onClick={() => openItem(it)} className="bg-white border border-gray-200 rounded-2xl px-1 py-2.5 text-center cursor-pointer active:bg-gray-50">
+                                    <div className={`w-9 h-9 mx-auto mb-1.5 rounded-lg flex items-center justify-center text-lg ${CAT[it._c].bg}`}>{CAT[it._c].icon}</div>
+                                    <div className="text-[10.5px] leading-tight h-7 overflow-hidden break-keep">{it.title}</div>
+                                </div>))}
+                        </div>
+                    </section>}
+                    {usedCats.map(c => {
+                        const arr = items.filter(i => i._c === c.id && (type === 'all' || i._t === type));
+                        if (!arr.length) return null;
+                        return <section key={c.id} className="mb-5">
+                            <h3 className="text-sm font-bold mb-2 flex items-center gap-1.5">{c.icon} {c.name}
+                                <span className="text-[10px] bg-gray-100 text-gray-500 rounded-full px-1.5">{arr.length}</span>
+                                <button onClick={() => selectCat(c.id)} className="ml-auto text-xs text-indigo-600 font-normal">더보기 ›</button></h3>
+                            <Box>{arr.slice(0, 4).map(it => <Row key={it._key + it.id} it={it} compact />)}</Box>
+                        </section>;
+                    })}
+                </>;
+            };
+
+            const subs = (cat !== 'all' && CAT[cat]) ? [...new Set(items.filter(i => i._c === cat).map(i => i._s))] : [];
+            const chip = (on) => `shrink-0 px-3 py-1.5 rounded-full text-[12.5px] border transition ${on ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`;
+            const navBtn = (on) => `w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13.5px] text-left transition ${on ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-700 hover:bg-gray-100'}`;
+
+            return (
+                <div className="min-h-screen pb-24 lg:pb-10">
+                    {/* ===== 데스크톱 (lg 이상): 좌측 사이드바 + 본문 ===== */}
+                    <div className="hidden lg:grid grid-cols-[250px_1fr] min-h-screen">
+                        <aside className="bg-white border-r border-gray-200 sticky top-0 h-screen overflow-y-auto p-4">
+                            <div className="flex items-center gap-3 mb-5 px-1">
+                                <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Professor&clothing=blazerAndShirt&glasses=round" alt="Profile" className="w-11 h-11 rounded-full bg-gray-100" />
+                                <div>
+                                    <div className="font-jua text-[15px] leading-tight">김형태의 코딩 포트폴리오</div>
+                                    <div className="text-[11px] text-gray-500">우송대 AI경영학과 학과장</div>
+                                </div>
+                            </div>
+                            <div className="text-[11px] text-gray-400 px-3 mb-1">바로가기</div>
+                            <button className={navBtn(cat === 'fav')} onClick={() => selectCat('fav')}>⭐ 즐겨찾기<span className="ml-auto text-xs text-gray-400">{favItems.length}</span></button>
+                            <button className={navBtn(cat === 'recent')} onClick={() => selectCat('recent')}>🕘 최근 연 사이트<span className="ml-auto text-xs text-gray-400">{recentItems.length}</span></button>
+                            <div className="text-[11px] text-gray-400 px-3 mt-4 mb-1">분류</div>
+                            <button className={navBtn(cat === 'all')} onClick={() => selectCat('all')}>🏠 전체<span className="ml-auto text-xs text-gray-400">{items.length}</span></button>
+                            {usedCats.map(c => (
+                                <button key={c.id} className={navBtn(cat === c.id)} onClick={() => selectCat(c.id)}>{c.icon} {c.name}<span className="ml-auto text-xs text-gray-400">{countOf(c.id)}</span></button>
+                            ))}
+                            <p className="text-[10.5px] text-gray-400 px-3 mt-6 leading-relaxed">AI (Claude, ChatGPT, 제미나이) 도우미들과 함께 만든 웹 애플리케이션 컬렉션입니다.</p>
+                        </aside>
+                        <main className="p-6 xl:p-8 min-w-0">
+                            <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm sticky top-4 z-10">
+                                <i className="ph-bold ph-magnifying-glass text-gray-400"></i>
+                                <input ref={searchRef} value={q} onChange={e => onSearch(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter' && list[0]) openItem(list[0]); if (e.key === 'Escape') onSearch(''); }}
+                                    className="flex-1 outline-none text-[15px]" placeholder="사이트 이름·설명·학생 이름으로 검색 (초성 OK: ㅂㅅㅇㄹㅁ)" />
+                                {q && <button onClick={() => onSearch('')} className="text-gray-400 text-sm">✕</button>}
+                                <span className="text-[11px] border border-gray-200 rounded px-1.5 text-gray-400">/</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 items-center mt-4">
+                                {subs.length > 1 && ['all', ...subs].map(s => <button key={s} className={chip(sub === s)} onClick={() => setSub(s)}>{s === 'all' ? '전체' : s}</button>)}
+                                <span className="ml-auto"></span>
+                                {Object.entries(TYPES).map(([k, v]) => <button key={k} className={chip(type === k)} onClick={() => setType(k)}>{v}</button>)}
+                                <button className={chip(false)} onClick={() => setView(view === 'grid' ? 'list' : 'grid')}>{view === 'grid' ? '☰ 리스트' : '▦ 그리드'}</button>
+                            </div>
+                            {cat === 'all' && !q && favItems.length > 0 && (
+                                <div className="mt-5">
+                                    <div className="text-xs font-bold text-gray-500 mb-2">⭐ 자주 쓰는 사이트</div>
+                                    <div className="flex gap-2 overflow-x-auto pb-1">
+                                        {favItems.map(it => (
+                                            <button key={it._key + it.id} onClick={() => openItem(it)} className="shrink-0 flex items-center gap-2 bg-white border border-gray-200 rounded-xl pl-1.5 pr-3 py-1.5 text-[12.5px] max-w-[230px] hover:border-indigo-300">
+                                                <span className={`w-7 h-7 rounded-md flex items-center justify-center ${CAT[it._c].bg}`}>{CAT[it._c].icon}</span>
+                                                <span className="truncate">{it.title}</span>
+                                            </button>))}
+                                    </div>
+                                </div>)}
+                            {(cat === 'fav' || cat === 'recent') && <h2 className="text-[15px] font-bold mt-6 mb-2.5">{cat === 'fav' ? '⭐ 즐겨찾기' : '🕘 최근 연 사이트'}</h2>}
+                            {cat !== 'all' && CAT[cat] && <h2 className="text-lg font-bold mt-6">{CAT[cat].icon} {CAT[cat].name} <span className="text-sm font-normal text-gray-400">{list.length}</span></h2>}
+                            <DesktopResults />
+                            <footer className="text-center mt-12 text-gray-400 text-xs">&copy; 2024 Kim Hyung Tae Portfolio. All rights reserved.</footer>
+                        </main>
+                    </div>
+
+                    {/* ===== 모바일·태블릿 (lg 미만): 상단 검색 + 분류 칩 + 하단 탭바 ===== */}
+                    <div className="lg:hidden">
+                        <header className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 pt-4 pb-2">
+                            <div className="flex items-center gap-2.5 mb-3">
+                                <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Professor&clothing=blazerAndShirt&glasses=round" alt="" className="w-9 h-9 rounded-full bg-gray-100" />
+                                <div>
+                                    <div className="font-jua text-[18px] leading-tight">김형태의 코딩 포트폴리오</div>
+                                    <div className="text-[11px] text-gray-500">우송대 AI경영학과 · {items.length}개 사이트</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 bg-gray-100 rounded-xl px-3 py-2.5">
+                                <i className="ph-bold ph-magnifying-glass text-gray-400"></i>
+                                <input value={q} onChange={e => onSearch(e.target.value)} className="flex-1 bg-transparent outline-none text-[15px] min-w-0" placeholder="사이트 검색 (초성 가능)" />
+                                {q && <button onClick={() => onSearch('')} className="text-gray-400">✕</button>}
+                            </div>
+                            <div className="flex gap-1.5 overflow-x-auto pt-2.5 pb-1" style={{ scrollbarWidth: 'none' }}>
+                                <button className={chip(cat === 'all')} onClick={() => selectCat('all')}>🏠 전체</button>
+                                {usedCats.map(c => <button key={c.id} className={chip(cat === c.id)} onClick={() => selectCat(c.id)}>{c.icon} {c.name}</button>)}
+                            </div>
+                            {subs.length > 1 && (
+                                <div className="flex gap-1.5 overflow-x-auto pt-1.5 pb-1" style={{ scrollbarWidth: 'none' }}>
+                                    {['all', ...subs].map(s => <button key={s} className={`shrink-0 px-2.5 py-1 rounded-full text-[11.5px] ${sub === s ? 'bg-indigo-100 text-indigo-700 font-bold' : 'bg-gray-50 text-gray-500'}`} onClick={() => setSub(s)}>{s === 'all' ? '전체' : s}</button>)}
+                                </div>)}
+                        </header>
+                        <main className="px-3.5 pt-4">
+                            {cat !== 'all' && CAT[cat] && !q && <h2 className="text-base font-bold mb-3">{CAT[cat].icon} {CAT[cat].name} <span className="text-xs font-normal text-gray-400">{list.length}</span></h2>}
+                            {(cat === 'fav' || cat === 'recent') && <h2 className="text-base font-bold mb-3">{cat === 'fav' ? '⭐ 즐겨찾기' : '🕘 최근 연 사이트'}</h2>}
+                            <MobileResults />
+                            <footer className="text-center mt-8 text-gray-400 text-[11px]">&copy; 2024 Kim Hyung Tae Portfolio.</footer>
+                        </main>
+
+                        {/* 하단 탭바 */}
+                        <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 grid grid-cols-4 pt-1.5" style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+                            {[['all', 'ph-house', '홈'], ['cat', 'ph-squares-four', '분류'], ['fav', 'ph-star', '즐겨찾기'], ['recent', 'ph-clock-counter-clockwise', '최근']].map(([k, ic, label]) => {
+                                const on = k === 'cat' ? sheetOpen : (!sheetOpen && (k === 'all' ? !['fav', 'recent'].includes(cat) : cat === k));
+                                return <button key={k} onClick={() => k === 'cat' ? setSheetOpen(true) : (onSearch(''), selectCat(k))}
+                                    className={`flex flex-col items-center gap-0.5 text-[10.5px] ${on ? 'text-indigo-600 font-bold' : 'text-gray-400'}`}>
+                                    <i className={`ph${on ? '-fill' : ''} ${ic} text-[22px]`}></i>{label}</button>;
+                            })}
+                        </nav>
+
+                        {/* 분류 바텀시트 */}
+                        {sheetOpen && (
+                            <div className="fixed inset-0 z-50 bg-black/40 flex items-end" onClick={() => setSheetOpen(false)}>
+                                <div className="bg-white w-full rounded-t-3xl p-4 pb-8 max-h-[80vh] overflow-y-auto modal-content" onClick={e => e.stopPropagation()}>
+                                    <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-3"></div>
+                                    <div className="font-bold mb-3">분류로 찾기</div>
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                        {usedCats.map(c => (
+                                            <button key={c.id} onClick={() => { onSearch(''); selectCat(c.id); }} className="flex items-center gap-2.5 border border-gray-200 rounded-2xl p-3 text-left active:bg-gray-50">
+                                                <span className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg ${c.bg}`}>{c.icon}</span>
+                                                <span><span className="block text-[13px] font-bold">{c.name}</span><span className="block text-[10.5px] text-gray-500">{countOf(c.id)}개 · {c.desc}</span></span>
+                                            </button>))}
+                                    </div>
+                                    <div className="flex gap-1.5 mt-4 flex-wrap">
+                                        {Object.entries(TYPES).map(([k, v]) => <button key={k} className={chip(type === k)} onClick={() => setType(k)}>{v}</button>)}
+                                    </div>
+                                </div>
+                            </div>)}
+                    </div>
+
+                    <button 
+                        onClick={() => setIsAdminOpen(true)}
+                        className="admin-btn bg-white text-gray-400 hover:text-indigo-600 p-2 rounded-full shadow border border-gray-200 hover:border-indigo-500 transition-all opacity-70 hover:opacity-100 bottom-20 lg:bottom-5"
+                    >
+                        <i className="ph-fill ph-gear text-lg"></i>
+                    </button>
+
+                    {/* Admin Dashboard */}
+                    {isAdminOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+                            <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col modal-content relative">
+                                
+                                <div className="bg-gray-900 text-white p-3 flex justify-between items-center shrink-0">
+                                    <h2 className="text-base font-bold font-jua flex items-center">
+                                        <i className="ph-fill ph-lock-key text-yellow-400 mr-2"></i>
+                                        관리자 대시보드
+                                    </h2>
+                                    <button onClick={() => setIsAdminOpen(false)} className="text-gray-400 hover:text-white transition">
+                                        <i className="ph-bold ph-x text-lg"></i>
+                                    </button>
+                                </div>
+
+                                {!isAdmin ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center p-8">
+                                        <div className="w-full max-w-xs space-y-3">
+                                            <p className="text-center text-gray-600 font-bold text-sm">비밀번호를 입력하세요.</p>
+                                            <input 
+                                                type="password" 
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && checkPassword()}
+                                                className="w-full p-2 border-2 border-gray-200 rounded-lg text-center text-lg font-bold tracking-widest focus:border-indigo-500 focus:outline-none"
+                                                placeholder="****"
+                                                autoFocus
+                                            />
+                                            <button onClick={checkPassword} className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold hover:bg-indigo-700 transition text-sm">
+                                                접속하기
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-1 overflow-hidden">
+                                        <div className="w-40 bg-gray-50 border-r border-gray-200 p-3 flex flex-col gap-1 shrink-0">
+                                            <button onClick={() => setAdminTab("list")} className={`p-2 rounded-lg text-left font-bold text-xs flex items-center ${adminTab==='list' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                                <i className="ph-bold ph-list-dashes mr-2"></i> 목록 관리
+                                            </button>
+                                            <button onClick={startCreate} className={`p-2 rounded-lg text-left font-bold text-xs flex items-center ${adminTab==='form' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                                <i className="ph-bold ph-plus-circle mr-2"></i> 개별 추가
+                                            </button>
+                                            <button onClick={() => setAdminTab("csv")} className={`p-2 rounded-lg text-left font-bold text-xs flex items-center ${adminTab==='csv' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+                                                <i className="ph-bold ph-file-csv mr-2"></i> 일괄 업로드
+                                            </button>
+                                            <div className="mt-auto">
+                                                <button onClick={() => { setIsAdmin(false); setIsAdminOpen(false); }} className="w-full p-1.5 rounded border border-gray-300 text-gray-500 text-[10px] hover:bg-red-50 hover:text-red-500 hover:border-red-200 font-bold">
+                                                    로그아웃
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 p-4 overflow-y-auto bg-white">
+                                            {adminTab === 'list' && (
+                                                <div className="h-full flex flex-col">
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <h3 className="font-bold text-sm">프로젝트 목록 ({projects.length})</h3>
+                                                    </div>
+                                                    {/* Scroll Fix: overflow-y-auto */}
+                                                    <div className="border rounded-lg overflow-y-auto flex-1">
+                                                        <table className="w-full text-xs text-left">
+                                                            <thead className="bg-gray-100 text-gray-600 uppercase font-bold text-[10px]">
+                                                                <tr>
+                                                                    <th className="p-2 w-[85%]">제목 / 설명</th>
+                                                                    <th className="p-2 w-[15%] text-center">관리</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-gray-100">
+                                                                {projects.map(p => (
+                                                                    <tr key={p.id} className="hover:bg-gray-50 group">
+                                                                        <td className="p-2">
+                                                                            <div className="flex items-start gap-2">
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="text-base">{p.icon}</span>
+                                                                                        <span className="font-bold text-gray-800 text-xs">{p.title}</span>
+                                                                                        <span className="text-[9px] bg-gray-100 text-gray-500 rounded px-1">{CAT[classify(p)[0]].name} · {classify(p)[1]}</span>
+                                                                                    </div>
+                                                                                    <div className="text-[10px] text-gray-500 truncate mt-0.5 pl-6">{p.desc}</div>
+                                                                                    <a href={p.link} target="_blank" className="text-[10px] text-indigo-400 hover:underline pl-6 block">{p.link}</a>
+                                                                                </div>
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="p-2 text-center space-x-1 align-top pt-2">
+                                                                            {p.docId ? (
+                                                                                <>
+                                                                                    <button onClick={() => startEdit(p)} className="text-gray-400 hover:text-indigo-600"><i className="ph-bold ph-pencil-simple text-sm"></i></button>
+                                                                                    <button onClick={() => handleDelete(p.docId)} className="text-gray-400 hover:text-red-600"><i className="ph-bold ph-trash text-sm"></i></button>
+                                                                                </>
+                                                                            ) : (
+                                                                                <span className="text-[9px] text-gray-300 bg-gray-100 px-1 rounded">Demo</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {adminTab === 'form' && (
+                                                <div className="max-w-md mx-auto">
+                                                    <h3 className="font-bold text-sm mb-4 border-b pb-1">
+                                                        {editTarget ? "프로젝트 수정" : "새 프로젝트 추가"}
+                                                    </h3>
+                                                    <div className="space-y-3">
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-gray-500 mb-1">제목</label>
+                                                            <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="예: 급식표 앱" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-gray-500 mb-1">설명</label>
+                                                            <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                value={formData.desc} onChange={e => setFormData({...formData, desc: e.target.value})} placeholder="설명" />
+                                                        </div>
+                                                        <div className="flex gap-3">
+                                                            <div className="flex-1">
+                                                                <label className="block text-[10px] font-bold text-gray-500 mb-1">아이콘</label>
+                                                                <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none text-center" 
+                                                                    value={formData.icon} onChange={e => setFormData({...formData, icon: e.target.value})} placeholder="🍱" />
+                                                            </div>
+                                                            <div className="flex-[2]">
+                                                                <label className="block text-[10px] font-bold text-gray-500 mb-1">색상 (Tailwind)</label>
+                                                                <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                    value={formData.color} onChange={e => setFormData({...formData, color: e.target.value})} placeholder="bg-blue-100 text-blue-600" />
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-3">
+                                                            <div className="flex-1">
+                                                                <label className="block text-[10px] font-bold text-gray-500 mb-1">분류 (대분류)</label>
+                                                                <select className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                                                    value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value, sub: e.target.value ? CAT[e.target.value].subs[0] : ''})}>
+                                                                    <option value="">자동 / 미분류</option>
+                                                                    {CATS.filter(c => c.id !== 'etc').map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex-1">
+                                                                <label className="block text-[10px] font-bold text-gray-500 mb-1">세부분류</label>
+                                                                <select className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none bg-white" disabled={!formData.category}
+                                                                    value={formData.sub || ''} onChange={e => setFormData({...formData, sub: e.target.value})}>
+                                                                    {(CAT[formData.category] ? CAT[formData.category].subs : ['-']).map(s => <option key={s} value={s}>{s}</option>)}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-gray-500 mb-1">링크</label>
+                                                            <input type="text" className="w-full p-1.5 border rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                                                value={formData.link} onChange={e => setFormData({...formData, link: e.target.value})} placeholder="./Lv4_S02_Lunch.html" />
+                                                        </div>
+                                                        <div className="pt-2 flex gap-2">
+                                                            <button onClick={() => setAdminTab("list")} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded text-xs font-bold hover:bg-gray-300">취소</button>
+                                                            <button onClick={handleFormSubmit} className="flex-[2] bg-indigo-600 text-white py-2 rounded text-xs font-bold hover:bg-indigo-700 shadow">
+                                                                {editTarget ? "수정 완료" : "추가하기"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {adminTab === 'csv' && (
+                                                <div className="max-w-md mx-auto text-center pt-4">
+                                                    <div className="bg-green-50 border-2 border-dashed border-green-300 rounded-lg p-6 mb-4">
+                                                        <i className="ph-duotone ph-file-csv text-4xl text-green-500 mb-2"></i>
+                                                        <h3 className="text-sm font-bold text-green-800 mb-1">CSV 일괄 업로드</h3>
+                                                        <p className="text-[10px] text-gray-600 mb-4">
+                                                            형식: 제목,설명,아이콘,색상,링크,분류ID(선택),세부분류(선택)<br/>분류ID: learn, ops, ai, stu, wis, biz, life
+                                                        </p>
+                                                        <input 
+                                                            type="file" 
+                                                            accept=".csv"
+                                                            ref={fileInputRef}
+                                                            onChange={handleCsvUpload}
+                                                            className="block w-full text-[10px] text-gray-500
+                                                                file:mr-2 file:py-1 file:px-3
+                                                                file:rounded-full file:border-0
+                                                                file:text-[10px] file:font-semibold
+                                                                file:bg-green-100 file:text-green-700
+                                                                hover:file:bg-green-200 cursor-pointer mx-auto max-w-xs
+                                                            "
+                                                        />
+                                                    </div>
+                                                    {uploadStatus && (
+                                                        <div className="bg-indigo-50 text-indigo-700 p-2 rounded text-xs font-bold animate-pulse">
+                                                            {uploadStatus}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
